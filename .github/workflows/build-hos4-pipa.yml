@@ -1,0 +1,130 @@
+name: Build HOS4.0 Pipa Kernel
+
+on:
+  push:
+    branches:
+      - "HOS4.0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hos4-pipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Pipa / Neutron Clang 24
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    env:
+      ARCH: arm64
+      SUBARCH: arm64
+      DEFCONFIG: vendor/pipa_defconfig
+      NEUTRON_TAG: "30072026"
+      KBUILD_BUILD_USER: HOS4
+      KBUILD_BUILD_HOST: github-actions
+      KBUILD_BUILD_VERSION: "1"
+
+    steps:
+      - name: Checkout kernel and KernelSU
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential cpio flex gcc-aarch64-linux-gnu \
+            libelf-dev libssl-dev lz4 patchelf python3 rsync unzip zip zstd
+
+      - name: Install pinned Neutron toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          tc_dir="$RUNNER_TEMP/neutron-$NEUTRON_TAG"
+          mkdir -p "$tc_dir"
+          cd "$tc_dir"
+          curl -fL --retry 5 --retry-all-errors \
+            -o antman \
+            https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman
+          chmod +x antman
+          ./antman -S="$NEUTRON_TAG"
+          ./antman --patch=glibc
+          echo "$tc_dir/bin" >> "$GITHUB_PATH"
+
+      - name: Verify toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang --version | tee toolchain.txt
+          ld.lld --version | tee -a toolchain.txt
+          grep -q "Neutron" toolchain.txt
+          grep -q "24.0.0" toolchain.txt
+
+      - name: Configure Pipa kernel
+        shell: bash
+        run: |
+          set -euo pipefail
+          make O=out "$DEFCONFIG"
+          grep -q '^CONFIG_KSU=y' out/.config
+          grep -q '^CONFIG_KSU_SUSFS=y' out/.config
+          grep -q '^CONFIG_MODULES=y' out/.config
+
+      - name: Build Pipa kernel
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -j"$(nproc)" O=out \
+            CC=clang \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            2>&1 | tee out/kernel_compile.log
+
+      - name: Package kernel artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          short_sha="${GITHUB_SHA::8}"
+          name="HOS4.0-pipa-${short_sha}"
+          mkdir -p artifacts
+          cp out/arch/arm64/boot/Image "artifacts/${name}-Image"
+          cp out/arch/arm64/boot/dtb "artifacts/${name}-dtb"
+          cp out/arch/arm64/boot/dtbo.img "artifacts/${name}-dtbo.img"
+          cp out/.config "artifacts/${name}-config"
+          cp out/kernel_compile.log "artifacts/${name}-compile.log"
+          cp toolchain.txt "artifacts/${name}-toolchain.txt"
+          (
+            cd artifacts
+            zip -9 "../${name}.zip" ./*
+            sha256sum "../${name}.zip" > "../${name}.zip.sha256"
+          )
+          sha256sum artifacts/* | tee SHA256SUMS
+          {
+            echo "### HOS4.0 Pipa build"
+            echo
+            echo "- Base: \`staging2\`"
+            echo "- Toolchain: Neutron Clang/LLD ${NEUTRON_TAG} (24.0.0git)"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo
+            echo '```'
+            cat SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload kernel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: HOS4.0-pipa-${{ github.sha }}
+          path: |
+            artifacts/**
+            HOS4.0-pipa-*.zip
+            HOS4.0-pipa-*.zip.sha256
+            SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
