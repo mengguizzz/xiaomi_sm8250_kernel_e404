@@ -3731,11 +3731,27 @@ static int32_t nvt_ts_suspend(struct device *dev)
 		NVT_LOG("%s pen wakeup gesture\n", enable ? "Enable" : "Disable");
 	} else if (ts->db_wakeup == 0) {
 		/*
-		 * Keep the MCU in normal mode while the panel is off.
-		 * HyperOS touchfeature modes can prevent a firmware redownload
-		 * after deep sleep on this panel.
+		 * The pen endpoint can keep the controller out of the bootloader
+		 * during the resume firmware download. Disable it before deep
+		 * sleep; nvt_ts_resume() restores it after the firmware is ready.
 		 */
-		NVT_LOG("skip deep sleep for resume compatibility\n");
+		if (ts->pen_bluetooth_connect) {
+			memset(buf, 0, sizeof(buf));
+			buf[0] = EVENT_MAP_HOST_CMD;
+			buf[1] = 0x7B;
+			buf[2] = 0x00;
+			ret = CTP_SPI_WRITE(ts->client, buf, 3);
+			if (ret < 0)
+				NVT_ERR("disable pen before suspend failed\n");
+			else
+				NVT_LOG("disable pen before deep sleep\n");
+			msleep(35);
+		}
+
+		/*---write command to enter "deep sleep mode"---*/
+		buf[0] = EVENT_MAP_HOST_CMD;
+		buf[1] = 0x11;
+		CTP_SPI_WRITE(ts->client, buf, 2);
 		if (ts->ts_pinctrl) {
 			ret = pinctrl_select_state(ts->ts_pinctrl, ts->pinctrl_state_suspend);
 			if (ret < 0) {
