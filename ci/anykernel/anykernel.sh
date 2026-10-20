@@ -20,10 +20,11 @@ devicecheck() {
 }
 
 devicename=pipa
-is_slot_device=1
-ramdisk_compression=auto
-patch_vbmeta_flag=auto
-block=/dev/block/bootdevice/by-name/boot
+IS_SLOT_DEVICE=1
+SLOT_SELECT=active
+RAMDISK_COMPRESSION=auto
+PATCH_VBMETA_FLAG=auto
+BLOCK=/dev/block/bootdevice/by-name/boot
 
 . tools/ak3-core.sh
 
@@ -47,9 +48,11 @@ patch_cmdline "e404_args" "e404_args=$rom,$dtbo,$dtb,$batt"
 write_boot
 
 ui_print "--> Installing matched Image/DTB/DTBO to vendor_boot"
-block=/dev/block/bootdevice/by-name/vendor_boot
-ramdisk_compression=auto
-patch_vbmeta_flag=auto
+BLOCK=/dev/block/bootdevice/by-name/vendor_boot
+IS_SLOT_DEVICE=1
+SLOT_SELECT=active
+RAMDISK_COMPRESSION=auto
+PATCH_VBMETA_FLAG=auto
 reset_ak
 dump_boot
 write_boot
