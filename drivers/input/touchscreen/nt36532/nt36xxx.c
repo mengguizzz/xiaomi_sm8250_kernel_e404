@@ -150,7 +150,12 @@ static ssize_t double_tap_store(struct kobject *kobj,
 	if (rc)
 		return -EINVAL;
 
-	ts->db_wakeup = !!val;
+	/*
+	 * HyperOS also updates this node directly. Keep gesture mode off and
+	 * retain the TDDI rails so the explicit 0x1A/0x15 scan control works.
+	 */
+	ts->db_wakeup = 0;
+	dsi_panel_doubleclick_enable(true);
 	return count;
 }
 
