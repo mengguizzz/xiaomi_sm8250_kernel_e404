@@ -392,7 +392,7 @@ And public attribution of xiaomi platforms(like pipa and so and)
 		reg = <0>; //Same as CS ID
 		status = "ok";
 
-		spi-max-frequency = <19200000>;	//4800000,9600000,15000000,19200000
+		spi-max-frequency = <9600000>;	//4800000,9600000,15000000,19200000
 		//novatek,reset-gpio = <&msm_gpio 102 0x00>;
 		novatek,irq-gpio = <&tlmm 39 0x2001>;
 
@@ -3328,7 +3328,7 @@ And public attribution of xiaomi platforms(like pipa and so and)
 	qcom,sec-charger-config = <0>;
 	qcom,usb-icl-ua = <3000000>;
 	qcom,fcc-max-ua = <5900000>;
-	qcom,fv-max-uv = <4460000>;
+	qcom,fv-max-uv = <4470000>;
 	qcom,non-fcc-fv-max-uv = <4440000>;
 	qcom,dc-icl-ua = <1000000>;
 	qcom,auto-recharge-soc = <99>;
@@ -3487,6 +3487,9 @@ And public attribution of xiaomi platforms(like pipa and so and)
 		mi,pd-battery-warm-th = <480>;
 		//mi,cp-sec-enable;
 		mi,therm-level-threshold = <12>;
+		/* Keep PPS active closer to CV; JEITA and thermal limits still apply. */
+		mi,fc2-exit-vbat-hys-mv = <40>;
+		mi,fc2-exit-soc = <98>;
 		mi,step-charge-high-vol-curr-max = <7840>;
 		mi,cell-vol-high-threshold-mv = <4440>;
 		mi,cell-vol-max-threshold-mv = <4487>;
@@ -4169,4 +4172,12 @@ And public attribution of xiaomi platforms(like pipa and so and)
 
 &sde_dp {
 	qcom,max-lclk-frequency-khz = <540000>;
+};
+
+&mdm0 {
+	status = "disabled";
+};
+
+&mhi_0 {
+	status = "disabled";
 };
