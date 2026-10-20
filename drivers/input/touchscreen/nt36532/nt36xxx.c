@@ -3878,6 +3878,16 @@ static int32_t nvt_ts_resume(struct device *dev)
 		}
 	}
 
+	/*
+	 * Wakeup-gesture mode leaves the firmware alive but stops normal
+	 * finger scanning. Re-enable the touch sensor before restoring IRQs.
+	 */
+	if (nvt_write_addr(ts->mmap->EVENT_BUF_ADDR | EVENT_MAP_HOST_CMD,
+			   0x15) < 0)
+		NVT_ERR("enable touch sensor after resume failed\n");
+	else
+		msleep(20);
+
 	nvt_irq_enable(true);
 
 #if NVT_TOUCH_ESD_PROTECT
