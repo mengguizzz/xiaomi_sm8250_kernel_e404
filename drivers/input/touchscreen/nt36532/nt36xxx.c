@@ -3755,10 +3755,12 @@ static int32_t nvt_ts_suspend(struct device *dev)
 		CTP_SPI_WRITE(ts->client, buf, 3);
 		NVT_LOG("%s pen wakeup gesture\n", enable ? "Enable" : "Disable");
 	} else if (ts->db_wakeup == 0) {
-		NVT_LOG("disable touch sensor while keeping TDDI rails alive\n");
+		NVT_LOG("enter deep sleep while keeping TDDI rails alive\n");
 		if (nvt_write_addr(ts->mmap->EVENT_BUF_ADDR | EVENT_MAP_HOST_CMD,
-				   0x1A) < 0)
-			NVT_ERR("disable touch sensor before suspend failed\n");
+				   0x11) < 0)
+			NVT_ERR("enter touch deep sleep failed\n");
+		else
+			ts->force_fw_reload = true;
 		if (ts->ts_pinctrl) {
 			ret = pinctrl_select_state(ts->ts_pinctrl, ts->pinctrl_state_suspend);
 			if (ret < 0) {
@@ -3878,7 +3880,9 @@ static int32_t nvt_ts_resume(struct device *dev)
 		 */
 		/* Wait for the panel and its shared VCI rail to settle. */
 		msleep(150);
-		fw_info_ret = nvt_get_fw_info();
+		fw_info_ret = -1;
+		if (!ts->force_fw_reload)
+			fw_info_ret = nvt_get_fw_info();
 		if (!fw_info_ret) {
 			NVT_LOG("firmware alive after resume, skip redownload\n");
 		} else if (nvt_update_firmware(ts->fw_name)) {
@@ -3887,6 +3891,7 @@ static int32_t nvt_ts_resume(struct device *dev)
 		} else {
 			nvt_check_fw_reset_state(RESET_STATE_REK);
 		}
+		ts->force_fw_reload = false;
 	}
 
 	/*
