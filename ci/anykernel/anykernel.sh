@@ -45,6 +45,7 @@ mv PIPA-dtbo.img dtbo.img
 
 dump_boot
 patch_cmdline "e404_args" "e404_args=$rom,$dtbo,$dtb,$batt"
+patch_cmdline "initcall_debug" "initcall_debug"
 write_boot
 
 ui_print "--> Installing matched Image/DTB/DTBO to vendor_boot"
