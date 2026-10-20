@@ -28,4 +28,6 @@
 `.github/workflows/build-hos4-pipa.yml` builds `vendor/pipa_defconfig` on
 Ubuntu with the pinned Neutron Clang/LLD `30072026` toolchain
 (`24.0.0git`). The workflow uploads the raw Image, DTB, DTBO, generated config,
-compile log, and a zip bundle.
+compile log, a raw-artifact zip, and a flashable AnyKernel3 zip. The AnyKernel
+package updates both the active `boot` and `vendor_boot` images with the matched
+Image, DTB, and DTBO for the current slot.

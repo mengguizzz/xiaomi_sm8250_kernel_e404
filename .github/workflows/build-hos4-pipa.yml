@@ -104,6 +104,24 @@ jobs:
             zip -9 "../${name}.zip" ./*
             sha256sum "../${name}.zip" > "../${name}.zip.sha256"
           )
+
+          curl -fL --retry 5 --retry-all-errors \
+            -o "$RUNNER_TEMP/anykernel3.zip" \
+            https://codeload.github.com/osm0sis/AnyKernel3/zip/refs/heads/master
+          unzip -q "$RUNNER_TEMP/anykernel3.zip" -d "$RUNNER_TEMP"
+          ak3_dir="$(find "$RUNNER_TEMP" -maxdepth 1 -type d -name 'AnyKernel3-*' | head -n1)"
+          test -n "$ak3_dir"
+          cp ci/anykernel/anykernel.sh "$ak3_dir/anykernel.sh"
+          cp "artifacts/${name}-Image" "$ak3_dir/PIPA-Image"
+          cp "artifacts/${name}-dtb" "$ak3_dir/PIPA-dtb"
+          cp "artifacts/${name}-dtbo.img" "$ak3_dir/PIPA-dtbo.img"
+          (
+            cd "$ak3_dir"
+            zip -r9 "$GITHUB_WORKSPACE/${name}-AnyKernel3.zip" \
+              META-INF tools anykernel.sh \
+              PIPA-Image PIPA-dtb PIPA-dtbo.img
+          )
+          sha256sum "${name}-AnyKernel3.zip" > "${name}-AnyKernel3.zip.sha256"
           sha256sum artifacts/* | tee SHA256SUMS
           {
             echo "### HOS4.0 Pipa build"
@@ -114,6 +132,7 @@ jobs:
             echo
             echo '```'
             cat SHA256SUMS
+            cat "${name}-AnyKernel3.zip.sha256"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -125,6 +144,8 @@ jobs:
             artifacts/**
             HOS4.0-pipa-*.zip
             HOS4.0-pipa-*.zip.sha256
+            HOS4.0-pipa-*-AnyKernel3.zip
+            HOS4.0-pipa-*-AnyKernel3.zip.sha256
             SHA256SUMS
           if-no-files-found: error
           retention-days: 30
