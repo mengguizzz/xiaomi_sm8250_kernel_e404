@@ -97,6 +97,7 @@ jobs:
           cp out/arch/arm64/boot/dtb "artifacts/${name}-dtb"
           cp out/arch/arm64/boot/dtbo.img "artifacts/${name}-dtbo.img"
           cp out/.config "artifacts/${name}-config"
+          cp out/System.map "artifacts/${name}-System.map"
           cp out/kernel_compile.log "artifacts/${name}-compile.log"
           cp toolchain.txt "artifacts/${name}-toolchain.txt"
           (
