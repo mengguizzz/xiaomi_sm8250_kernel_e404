@@ -46,6 +46,9 @@ mv PIPA-dtbo.img dtbo.img
 dump_boot
 patch_cmdline "e404_args" "e404_args=$rom,$dtbo,$dtb,$batt"
 patch_cmdline "initcall_debug" "initcall_debug"
+patch_cmdline "hung_task_panic" "hung_task_panic=1 hung_task_timeout_secs=15"
+patch_cmdline "softlockup_panic" "softlockup_panic=1"
+patch_cmdline "panic_on_warn" "panic_on_warn=1"
 write_boot
 
 ui_print "--> Installing matched Image/DTB/DTBO to vendor_boot"
