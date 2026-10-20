@@ -39,9 +39,9 @@ dtbo=dtbo_oem_pipa
 dtb=dtb_def
 batt=batt_def
 
-mv PIPA-Image "$home/Image"
-mv PIPA-dtb "$home/dtb"
-mv PIPA-dtbo.img "$home/dtbo.img"
+mv PIPA-Image Image
+mv PIPA-dtb dtb
+mv PIPA-dtbo.img dtbo.img
 
 dump_boot
 patch_cmdline "e404_args" "e404_args=$rom,$dtbo,$dtb,$batt"
