@@ -3750,10 +3750,13 @@ static int32_t nvt_ts_suspend(struct device *dev)
 		CTP_SPI_WRITE(ts->client, buf, 3);
 		NVT_LOG("%s pen wakeup gesture\n", enable ? "Enable" : "Disable");
 	} else if (ts->db_wakeup == 0) {
-		/*---write command to enter "deep sleep mode"---*/
-		buf[0] = EVENT_MAP_HOST_CMD;
-		buf[1] = 0x11;
-		CTP_SPI_WRITE(ts->client, buf, 2);
+		/*
+		 * Keep the controller firmware alive while the panel is off.
+		 * Novatek 0x11 deep sleep can leave this M82 panel in a state where
+		 * the resume firmware redownload never reaches RESET_STATE_INIT.
+		 * The pinctrl suspend state and disabled IRQ still prevent events.
+		 */
+		NVT_LOG("keep touch firmware alive across panel suspend\n");
 		if (ts->ts_pinctrl) {
 			ret = pinctrl_select_state(ts->ts_pinctrl, ts->pinctrl_state_suspend);
 			if (ret < 0) {
@@ -3817,6 +3820,7 @@ return:
 static int32_t nvt_ts_resume(struct device *dev)
 {
 	int ret = 0;
+	int fw_info_ret;
 	if (bTouchIsAwake) {
 		NVT_LOG("Touch is already resume\n");
 		return 0;
@@ -3857,8 +3861,19 @@ static int32_t nvt_ts_resume(struct device *dev)
 			nvt_update_firmware(ts->fw_name);
 		}
 	} else {
-		if (nvt_update_firmware(ts->fw_name)) {
-			NVT_ERR("download firmware failed, ignore check fw state\n");
+		/*
+		 * Panel power sequencing does not always reset the Novatek MCU.
+		 * Conversely, a blind firmware redownload can leave it stuck in the
+		 * bootloader when the controller was still running. Probe the live
+		 * firmware first and only reflash when it is actually unavailable.
+		 */
+		msleep(20);
+		fw_info_ret = nvt_get_fw_info();
+		if (!fw_info_ret) {
+			NVT_LOG("firmware alive after resume, skip redownload\n");
+		} else if (nvt_update_firmware(ts->fw_name)) {
+			NVT_ERR("download firmware failed after fw probe (%d)\n",
+				fw_info_ret);
 		} else {
 			nvt_check_fw_reset_state(RESET_STATE_REK);
 		}
