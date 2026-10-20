@@ -3787,40 +3787,6 @@ static int32_t nvt_ts_suspend(struct device *dev)
 	return 0;
 }
 
-static int32_t nvt_reload_firmware_on_resume(void)
-{
-	int32_t attempt;
-	int32_t ret = -1;
-
-	for (attempt = 1; attempt <= 3; attempt++) {
-		if (nvt_get_dbgfw_status()) {
-			ret = nvt_update_firmware(DEFAULT_DEBUG_FW_NAME);
-			if (ret) {
-				NVT_ERR("use built-in fw");
-				ret = nvt_update_firmware(ts->fw_name);
-			}
-		} else {
-			ret = nvt_update_firmware(ts->fw_name);
-		}
-
-		if (!ret)
-			ret = nvt_check_fw_reset_state(RESET_STATE_REK);
-
-		if (!ret) {
-			NVT_LOG("resume firmware recovery succeeded, attempt=%d\n",
-				attempt);
-			return 0;
-		}
-
-		NVT_ERR("resume firmware recovery failed, attempt=%d, ret=%d\n",
-			attempt, ret);
-		if (attempt < 3)
-			msleep(100);
-	}
-
-	return ret;
-}
-
 /*******************************************************
 Description:
 	Novatek touchscreen driver resume function.
@@ -3865,8 +3831,18 @@ static int32_t nvt_ts_resume(struct device *dev)
 #if NVT_TOUCH_SUPPORT_HW_RST
 	gpio_set_value(ts->reset_gpio, 1);
 #endif
-	if (nvt_reload_firmware_on_resume())
-		NVT_ERR("resume firmware recovery failed after 3 attempts\n");
+	if (nvt_get_dbgfw_status()) {
+		if (nvt_update_firmware(DEFAULT_DEBUG_FW_NAME) < 0) {
+			NVT_ERR("use built-in fw");
+			nvt_update_firmware(ts->fw_name);
+		}
+	} else {
+		if (nvt_update_firmware(ts->fw_name)) {
+			NVT_ERR("download firmware failed, ignore check fw state\n");
+		} else {
+			nvt_check_fw_reset_state(RESET_STATE_REK);
+		}
+	}
 
 	if (!ts->db_wakeup) {
 		nvt_irq_enable(true);
