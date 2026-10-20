@@ -380,6 +380,12 @@
 		gpio = <&tlmm 71 0>;
 		enable-active-high;
 		regulator-boot-on;
+		/*
+		 * The Novatek NT36532 shares this rail with the panel. Disabling it
+		 * across panel blank leaves the controller unable to reload firmware
+		 * on the first resume. Keep the rail stable for the touch controller.
+		 */
+		regulator-always-on;
 		pinctrl-names = "default";
 		pinctrl-0 = <&display_panel_vci_default>;
 	};

@@ -3867,7 +3867,8 @@ static int32_t nvt_ts_resume(struct device *dev)
 		 * bootloader when the controller was still running. Probe the live
 		 * firmware first and only reflash when it is actually unavailable.
 		 */
-		msleep(20);
+		/* Wait for the panel and its shared VCI rail to settle. */
+		msleep(150);
 		fw_info_ret = nvt_get_fw_info();
 		if (!fw_info_ret) {
 			NVT_LOG("firmware alive after resume, skip redownload\n");
