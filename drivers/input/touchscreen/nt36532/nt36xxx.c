@@ -2476,8 +2476,15 @@ static int nvt_set_cur_value(int nvt_mode, int nvt_value)
 
 	NVT_LOG("mode:%d, value:%d", nvt_mode, nvt_value);
 	if (nvt_mode == Touch_Doubletap_Mode && ts && nvt_value >= 0) {
-		ts-> db_wakeup = nvt_value ? (ts-> db_wakeup | 0x01) : (ts-> db_wakeup & 0xFE);
-		nvt_set_gesture_mode();
+		/*
+		 * HyperOS enables this mode after boot. The M82 TDDI firmware
+		 * cannot reliably return from its gesture-only scan after resume,
+		 * so keep the panel's touch rails alive and use the explicit
+		 * sensor disable/enable commands instead.
+		 */
+		ts->db_wakeup &= ~0x01;
+		dsi_panel_doubleclick_enable(true);
+		NVT_LOG("double tap disabled, keep TDDI touch rails for resume");
 		return 0;
 	} else if (nvt_mode == Touch_Pen_ENABLE && ts) {
 #if defined(NVT_PEN_CONNECT_STRATEGY)
@@ -3718,6 +3725,8 @@ static int32_t nvt_ts_suspend(struct device *dev)
 
 	bTouchIsAwake = 0;
 
+	dsi_panel_doubleclick_enable(true);
+
 	if (ts->db_wakeup & 0x01 || ts->db_wakeup & 0x02) {
 		/*---write command to enter "wakeup gesture mode"---*/
 		/*DoubleClick wakeup CMD was sent by display to meet timing*/
@@ -3741,13 +3750,10 @@ static int32_t nvt_ts_suspend(struct device *dev)
 		CTP_SPI_WRITE(ts->client, buf, 3);
 		NVT_LOG("%s pen wakeup gesture\n", enable ? "Enable" : "Disable");
 	} else if (ts->db_wakeup == 0) {
-		/*
-		 * Keep the controller firmware alive while the panel is off.
-		 * Novatek 0x11 deep sleep can leave this M82 panel in a state where
-		 * the resume firmware redownload never reaches RESET_STATE_INIT.
-		 * The pinctrl suspend state and disabled IRQ still prevent events.
-		 */
-		NVT_LOG("keep touch firmware alive across panel suspend\n");
+		NVT_LOG("disable touch sensor while keeping TDDI rails alive\n");
+		if (nvt_write_addr(ts->mmap->EVENT_BUF_ADDR | EVENT_MAP_HOST_CMD,
+				   0x1A) < 0)
+			NVT_ERR("disable touch sensor before suspend failed\n");
 		if (ts->ts_pinctrl) {
 			ret = pinctrl_select_state(ts->ts_pinctrl, ts->pinctrl_state_suspend);
 			if (ret < 0) {
