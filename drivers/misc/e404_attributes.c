@@ -29,10 +29,10 @@ struct e404_attributes e404_data = {
     .dtbo_type                  = 0,
     .batt_profile               = 1,
 #ifdef CONFIG_BOARD_PIPA
-    .panel_oem_width_pipa       = 1662,
-    .panel_oem_height_pipa      = 2660,
-    .panel_width_pipa           = 166,
-    .panel_height_pipa          = 266,
+    .panel_oem_width_pipa       = 148,
+    .panel_oem_height_pipa      = 237,
+    .panel_width_pipa           = 148,
+    .panel_height_pipa          = 237,
 #else
     .panel_width                = 70,
     .panel_height               = 155,

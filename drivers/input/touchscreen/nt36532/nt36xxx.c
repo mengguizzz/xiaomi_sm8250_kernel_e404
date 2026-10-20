@@ -2466,8 +2466,10 @@ static void nvt_set_gesture_mode(void)
 static int nvt_set_cur_value(int nvt_mode, int nvt_value)
 {
 	if (nvt_mode >= Touch_Mode_NUM || nvt_mode < 0) {
-		NVT_ERR("%s, nvt mode is error:%d", __func__, nvt_mode);
-		return -EINVAL;
+		printk_ratelimited(KERN_WARNING
+			"%s: ignoring unsupported HyperOS touch mode %d\n",
+			__func__, nvt_mode);
+		return 0;
 	}
 
 	NVT_LOG("mode:%d, value:%d", nvt_mode, nvt_value);
@@ -2523,12 +2525,14 @@ static int nvt_set_cur_value(int nvt_mode, int nvt_value)
 
 static int nvt_get_mode_value(int mode, int value_type)
 {
-	int value = -1;
+	int value = 0;
 
 	if (mode < Touch_Mode_NUM && mode >= 0)
 		value = xiaomi_touch_interfaces.touch_mode[mode][value_type];
 	else
-		NVT_ERR("%s, don't support\n", __func__);
+		printk_ratelimited(KERN_WARNING
+			"%s: ignoring unsupported HyperOS touch mode %d\n",
+			__func__, mode);
 
 	return value;
 }
@@ -2541,7 +2545,13 @@ static int nvt_get_mode_all(int mode, int *value)
 		value[2] = xiaomi_touch_interfaces.touch_mode[mode][GET_MIN_VALUE];
 		value[3] = xiaomi_touch_interfaces.touch_mode[mode][GET_MAX_VALUE];
 	} else {
-		NVT_ERR("%s, don't support\n",  __func__);
+		value[0] = 0;
+		value[1] = 0;
+		value[2] = 0;
+		value[3] = 0;
+		printk_ratelimited(KERN_WARNING
+			"%s: ignoring unsupported HyperOS touch mode %d\n",
+			__func__, mode);
 	}
 	NVT_LOG("%s, mode:%d, value:%d:%d:%d:%d\n", __func__, mode, value[0],
 					value[1], value[2], value[3]);
