@@ -84,6 +84,17 @@ jobs:
             LLVM_IAS=1 \
             2>&1 | tee out/kernel_compile.log
 
+      - name: Upload compile log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: STAGING2-compile-failure-${{ github.sha }}
+          path: |
+            out/kernel_compile.log
+            out/.config
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Package kernel artifacts
         shell: bash
         run: |
