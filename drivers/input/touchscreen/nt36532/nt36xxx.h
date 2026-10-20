@@ -221,6 +221,7 @@ struct nvt_ts_data {
 	uint8_t *xbuf;
 	struct mutex xbuf_lock;
 	bool irq_enabled;
+	bool irq_wake_enabled;
 	bool pen_support;
 	bool stylus_resol_double;
 	bool fw_debug;

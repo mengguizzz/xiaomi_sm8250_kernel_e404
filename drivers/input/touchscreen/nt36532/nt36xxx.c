@@ -3739,7 +3739,11 @@ static int32_t nvt_ts_suspend(struct device *dev)
 		buf[1] = 0x13;
 		CTP_SPI_WRITE(ts->client, buf, 2);
 
-		enable_irq_wake(ts->client->irq);
+		ret = enable_irq_wake(ts->client->irq);
+		if (!ret)
+			ts->irq_wake_enabled = true;
+		else
+			NVT_ERR("enable irq wake failed. ret=%d\n", ret);
 
 		enable = (ts->db_wakeup & 0x02);
 		memset(buf, 0, sizeof(buf));
@@ -3839,17 +3843,24 @@ static int32_t nvt_ts_resume(struct device *dev)
 	NVT_LOG("start\n");
 
 	ts->ic_state = NVT_IC_RESUME_IN;
-	if (!ts->db_wakeup) {
-		if (ts->ts_pinctrl) {
-			ret = pinctrl_select_state(ts->ts_pinctrl, ts->pinctrl_state_active);
-			if (ret < 0) {
-				NVT_ERR("Failed to select %s pinstate %d\n",
-					PINCTRL_STATE_ACTIVE, ret);
-			}
-		} else {
-			NVT_ERR("Failed to init pinctrl\n");
-		}
+	if (ts->irq_wake_enabled) {
+		ret = disable_irq_wake(ts->client->irq);
+		if (!ret)
+			ts->irq_wake_enabled = false;
+		else
+			NVT_ERR("disable irq wake failed. ret=%d\n", ret);
 	}
+	if (ts->ts_pinctrl) {
+		ret = pinctrl_select_state(ts->ts_pinctrl, ts->pinctrl_state_active);
+		if (ret < 0) {
+			NVT_ERR("Failed to select %s pinstate %d\n",
+				PINCTRL_STATE_ACTIVE, ret);
+		}
+	} else {
+		NVT_ERR("Failed to init pinctrl\n");
+	}
+	/* Quiesce the IRQ while the controller is reprobed or reflashed. */
+	nvt_irq_enable(false);
 
 	// please make sure display reset(RESX) sequence and mipi dsi cmds sent before this
 #if NVT_TOUCH_SUPPORT_HW_RST
@@ -3880,9 +3891,7 @@ static int32_t nvt_ts_resume(struct device *dev)
 		}
 	}
 
-	if (!ts->db_wakeup) {
-		nvt_irq_enable(true);
-	}
+	nvt_irq_enable(true);
 
 #if NVT_TOUCH_ESD_PROTECT
 	nvt_esd_check_enable(false);
