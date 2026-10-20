@@ -3849,7 +3849,14 @@ static int32_t nvt_ts_resume(struct device *dev)
 #if NVT_TOUCH_SUPPORT_HW_RST
 	gpio_set_value(ts->reset_gpio, 1);
 #endif
-	if (nvt_get_dbgfw_status()) {
+	if (ts->pen_bluetooth_connect) {
+		/*
+		 * Pen mode can leave the controller running instead of entering
+		 * the bootloader. Its firmware is still resident across deep sleep,
+		 * so wake the existing image instead of forcing a failed redownload.
+		 */
+		NVT_LOG("skip resume firmware redownload while pen connected\n");
+	} else if (nvt_get_dbgfw_status()) {
 		if (nvt_update_firmware(DEFAULT_DEBUG_FW_NAME) < 0) {
 			NVT_ERR("use built-in fw");
 			nvt_update_firmware(ts->fw_name);
