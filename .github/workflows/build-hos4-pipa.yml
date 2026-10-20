@@ -1,9 +1,10 @@
-name: Build Pure staging-bpf Pipa Kernel
+name: Build HyperOS 4 Pipa Kernel
 
 on:
   push:
     branches:
       - "staging-bpf-test"
+      - "hos4-nabu-pen"
   workflow_dispatch:
 
 permissions:
@@ -134,9 +135,10 @@ jobs:
           sha256sum "${name}-AnyKernel3.zip" > "${name}-AnyKernel3.zip.sha256"
           sha256sum artifacts/* | tee SHA256SUMS
           {
-            echo "### Pure staging-bpf Pipa build"
+            echo "### HyperOS 4 Pipa Pipa/Nabu pen build"
             echo
-            echo "- Base: \`staging2\`"
+            echo "- Base: \`c01e0f81\` (stable Novatek resume fallback)"
+            echo "- Experiment: kernel-side forced pen mode at boot/resume"
             echo "- Toolchain: Neutron Clang/LLD ${NEUTRON_TAG} (24.0.0git)"
             echo "- Commit: \`${GITHUB_SHA}\`"
             echo

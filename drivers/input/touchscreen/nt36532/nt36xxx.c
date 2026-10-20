@@ -78,6 +78,18 @@ static int32_t nvt_ts_suspend(struct device *dev);
 static int32_t nvt_ts_resume(struct device *dev);
 struct nvt_ts_data *ts;
 
+/*
+ * Keep the digitizer in pen-scan mode without requiring the legacy
+ * TouchFeature HIDL to be running first. This mirrors the working A17
+ * HyperOS approach used on Nabu, where the kernel enables the pen after
+ * firmware load and the userspace compatibility layer only services
+ * framework queries.
+ */
+static bool force_pen_enable = true;
+module_param(force_pen_enable, bool, 0644);
+MODULE_PARM_DESC(force_pen_enable,
+		 "Keep Novatek pen scanning enabled unless charging or in game mode");
+
 #if BOOT_UPDATE_FIRMWARE
 static struct workqueue_struct *nvt_fwu_wq;
 extern void Boot_Update_Firmware(struct work_struct *work);
@@ -1228,9 +1240,11 @@ int switch_pen_input_device(void) {
 
 	msleep(35);
 	mutex_lock(&ts->pen_switch_lock);
-	enable = ((ts->pen_bluetooth_connect) && !(ts->pen_charge_connect) && !(ts->game_mode_enable));
-	NVT_LOG("pen_bluetooth_connect is %d, pen_charge_connect is %d, game_mode_enable %d, %s pen input device\n",
-	ts->pen_bluetooth_connect, ts->pen_charge_connect, ts->game_mode_enable, enable ? "ENABLE" : "DISABLE");
+	enable = ((force_pen_enable || ts->pen_bluetooth_connect) &&
+		  !ts->pen_charge_connect && !ts->game_mode_enable);
+	NVT_LOG("force_pen_enable is %d, pen_bluetooth_connect is %d, pen_charge_connect is %d, game_mode_enable %d, %s pen input device\n",
+		force_pen_enable, ts->pen_bluetooth_connect, ts->pen_charge_connect,
+		ts->game_mode_enable, enable ? "ENABLE" : "DISABLE");
 	//---set xdata index to EVENT BUF ADDR---
 	ret = nvt_set_page(ts->mmap->EVENT_BUF_ADDR | EVENT_MAP_HOST_CMD);
 	if (ret < 0) {
@@ -1243,7 +1257,7 @@ int switch_pen_input_device(void) {
 	buf[2] = !!enable;
 	ret = CTP_SPI_WRITE(ts->client, buf, 3);
 	if (ret < 0)
-		NVT_ERR("set pen %s failed!\n", enable ? "DISABLE" : "ENABLE");
+		NVT_ERR("set pen %s failed!\n", enable ? "ENABLE" : "DISABLE");
 
 nvt_set_pen_enable_out:
 	mutex_unlock(&ts->pen_switch_lock);
@@ -2302,7 +2316,7 @@ static void nvt_init_touchmode_data(void)
 	xiaomi_touch_interfaces.touch_mode[Touch_Resist_RF][GET_CUR_VALUE] = 0;
 
 	/* Stylus */
-	xiaomi_touch_interfaces.touch_mode[Touch_Pen_ENABLE][GET_MAX_VALUE] = 18;
+	xiaomi_touch_interfaces.touch_mode[Touch_Pen_ENABLE][GET_MAX_VALUE] = 255;
 	xiaomi_touch_interfaces.touch_mode[Touch_Pen_ENABLE][GET_MIN_VALUE] = -1;
 	xiaomi_touch_interfaces.touch_mode[Touch_Pen_ENABLE][GET_DEF_VALUE] = 0;
 	xiaomi_touch_interfaces.touch_mode[Touch_Pen_ENABLE][SET_CUR_VALUE] = 0;
@@ -2479,15 +2493,20 @@ static int nvt_set_cur_value(int nvt_mode, int nvt_value)
 		return 0;
 	} else if (nvt_mode == Touch_Pen_ENABLE && ts) {
 #if defined(NVT_PEN_CONNECT_STRATEGY)
-		if (nvt_value >= 0 && !!(nvt_value >> 4))
-			ts->pen_bluetooth_connect = 1;
-		else
-			ts->pen_bluetooth_connect = 0;
+		ts->pen_mode_value = nvt_value;
+		ts->pen_bluetooth_connect =
+			nvt_value >= 0 && !!(nvt_value & 0xF0);
 
 		ts->db_wakeup = ts->db_wakeup & 0xFD; /* close off screen short hand by defalut */
 		dsi_panel_doubleclick_enable(!!ts->db_wakeup);
-		NVT_LOG("nvt_value is 0x%02X, pen status is %s, pen id is %d, pen_bluetooth_connect is %d, db_wakeup is 0x%02X",
-					nvt_value, (nvt_value >> 4) ? "connect":"disconnct", nvt_value & 0x0F, ts->pen_bluetooth_connect, ts->db_wakeup);
+		NVT_LOG("nvt_value is 0x%02X, pen status is %s, pen id is %d, pen_bluetooth_connect is %d, forced %d, db_wakeup is 0x%02X",
+			nvt_value, ts->pen_bluetooth_connect ? "connect" : "disconnect",
+			nvt_value & 0x0F, ts->pen_bluetooth_connect, force_pen_enable,
+			ts->db_wakeup);
+		xiaomi_touch_interfaces.touch_mode[Touch_Pen_ENABLE][SET_CUR_VALUE] =
+			nvt_value;
+		xiaomi_touch_interfaces.touch_mode[Touch_Pen_ENABLE][GET_CUR_VALUE] =
+			nvt_value;
 #endif
 
 		switch_pen_input_device();
@@ -3299,6 +3318,7 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 #endif
 
 #if defined(NVT_PEN_CONNECT_STRATEGY)
+	ts->pen_mode_value = -1;
 	ts->pen_bluetooth_connect = 0;
 	ts->pen_charge_connect = false;
 	ts->game_mode_enable = 0;
