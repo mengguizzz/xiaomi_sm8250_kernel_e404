@@ -2477,9 +2477,9 @@ static int nvt_set_cur_value(int nvt_mode, int nvt_value)
 		ts-> db_wakeup = nvt_value ? (ts-> db_wakeup | 0x01) : (ts-> db_wakeup & 0xFE);
 		nvt_set_gesture_mode();
 		return 0;
-	} else if (nvt_mode == Touch_Pen_ENABLE && ts && nvt_value >= 0) {
+	} else if (nvt_mode == Touch_Pen_ENABLE && ts) {
 #if defined(NVT_PEN_CONNECT_STRATEGY)
-		if (!!(nvt_value >> 4))
+		if (nvt_value >= 0 && !!(nvt_value >> 4))
 			ts->pen_bluetooth_connect = 1;
 		else
 			ts->pen_bluetooth_connect = 0;
