@@ -150,12 +150,7 @@ static ssize_t double_tap_store(struct kobject *kobj,
 	if (rc)
 		return -EINVAL;
 
-	/*
-	 * HyperOS also updates this node directly. Keep gesture mode off and
-	 * retain the TDDI rails so the explicit 0x1A/0x15 scan control works.
-	 */
-	ts->db_wakeup = 0;
-	dsi_panel_doubleclick_enable(true);
+	ts->db_wakeup = !!val;
 	return count;
 }
 
@@ -2481,15 +2476,9 @@ static int nvt_set_cur_value(int nvt_mode, int nvt_value)
 
 	NVT_LOG("mode:%d, value:%d", nvt_mode, nvt_value);
 	if (nvt_mode == Touch_Doubletap_Mode && ts && nvt_value >= 0) {
-		/*
-		 * HyperOS enables this mode after boot. The M82 TDDI firmware
-		 * cannot reliably return from its gesture-only scan after resume,
-		 * so keep the panel's touch rails alive and use the explicit
-		 * sensor disable/enable commands instead.
-		 */
-		ts->db_wakeup &= ~0x01;
-		dsi_panel_doubleclick_enable(true);
-		NVT_LOG("double tap disabled, keep TDDI touch rails for resume");
+		ts->db_wakeup = nvt_value ?
+			(ts->db_wakeup | 0x01) : (ts->db_wakeup & 0xFE);
+		nvt_set_gesture_mode();
 		return 0;
 	} else if (nvt_mode == Touch_Pen_ENABLE && ts) {
 #if defined(NVT_PEN_CONNECT_STRATEGY)
