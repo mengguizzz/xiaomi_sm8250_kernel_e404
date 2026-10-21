@@ -3864,7 +3864,13 @@ static int32_t nvt_ts_resume(struct device *dev)
 
 	// please make sure display reset(RESX) sequence and mipi dsi cmds sent before this
 #if NVT_TOUCH_SUPPORT_HW_RST
-	gpio_set_value(ts->reset_gpio, 1);
+	if (gpio_is_valid(ts->reset_gpio)) {
+		gpio_set_value(ts->reset_gpio, 0);
+		mdelay(10);
+		gpio_set_value(ts->reset_gpio, 1);
+		mdelay(50);
+		ts->force_fw_reload = true;
+	}
 #endif
 	if (nvt_get_dbgfw_status()) {
 		if (nvt_update_firmware(DEFAULT_DEBUG_FW_NAME) < 0) {
