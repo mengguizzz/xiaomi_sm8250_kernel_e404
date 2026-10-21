@@ -3814,6 +3814,7 @@ static int32_t nvt_ts_resume(struct device *dev)
 {
 	int ret = 0;
 	int fw_info_ret;
+	bool gesture_resume;
 	if (bTouchIsAwake) {
 		NVT_LOG("Touch is already resume\n");
 		return 0;
@@ -3832,6 +3833,7 @@ static int32_t nvt_ts_resume(struct device *dev)
 	NVT_LOG("start\n");
 
 	ts->ic_state = NVT_IC_RESUME_IN;
+	gesture_resume = ts->irq_wake_enabled;
 	if (ts->irq_wake_enabled) {
 		ret = disable_irq_wake(ts->client->irq);
 		if (!ret)
@@ -3850,6 +3852,10 @@ static int32_t nvt_ts_resume(struct device *dev)
 	}
 	/* Quiesce the IRQ while the controller is reprobed or reflashed. */
 	nvt_irq_enable(false);
+	if (gesture_resume) {
+		NVT_LOG("reset firmware idle state after wakeup gesture\n");
+		nvt_sw_reset_idle();
+	}
 
 	// please make sure display reset(RESX) sequence and mipi dsi cmds sent before this
 #if NVT_TOUCH_SUPPORT_HW_RST
