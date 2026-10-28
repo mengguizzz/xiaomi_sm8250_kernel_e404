@@ -64,6 +64,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           test "$(git rev-parse HEAD)" = "46640d7de1d86f12c17bb490c4dba685a5f5738b"
           clang --version | tee toolchain.txt
           ld.lld --version | tee -a toolchain.txt
