@@ -3185,10 +3185,12 @@ static void _sde_plane_update_properties(struct drm_plane *plane,
 		psde->pipe_hw->ops.setup_sharpening)
 		_sde_plane_update_sharpening(psde);
 
-        if (pstate->dirty & (SDE_PLANE_DIRTY_QOS | SDE_PLANE_DIRTY_RECTS |
-			     SDE_PLANE_DIRTY_FORMAT)) {
-		_sde_plane_set_qos_lut(plane, crtc, fb);
-	}
+	/*
+	 * The QoS LUT is selected from the current CRTC refresh rate. A DFPS
+	 * switch does not make the plane itself dirty, so refresh this every
+	 * update to avoid retaining the previous mode's memory QoS settings.
+	 */
+	_sde_plane_set_qos_lut(plane, crtc, fb);
 
 	if (plane->type != DRM_PLANE_TYPE_CURSOR) {
 		_sde_plane_set_qos_ctrl(plane, true, SDE_PLANE_QOS_PANIC_CTRL);
