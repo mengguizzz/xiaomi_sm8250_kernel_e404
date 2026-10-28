@@ -5,6 +5,7 @@ on:
     branches:
       - "staging-bpf-test"
       - "hos4-nabu-pen"
+      - "hos4-nabu-pen-millet"
   workflow_dispatch:
 
 permissions:
