@@ -21,6 +21,7 @@ jobs:
       ARCH: arm64
       SUBARCH: arm64
       LOCALVERSION: "-N0-kernel+"
+      KCFLAGS: "-DCONFIG_LITTLE_CPU_MASK=15 -DCONFIG_BIG_CPU_MASK=112 -DCONFIG_PRIME_CPU_MASK=128"
       KBUILD_BUILD_USER: joeyzhu
       KBUILD_BUILD_HOST: ubuntu
       KBUILD_BUILD_VERSION: "8"
@@ -74,11 +75,19 @@ jobs:
           ld.lld --version | tee -a toolchain.txt
           grep -q "Ubuntu clang version 20.1.8 (2ubuntu8)" toolchain.txt
           grep -q "LLD 20.1.8" toolchain.txt
+          rsync -a \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='buildsrc' \
+            --exclude='artifacts' \
+            --exclude='out' \
+            ./ buildsrc/
 
       - name: Configure from the original full stock config
         shell: bash
         run: |
           set -euo pipefail
+          cd buildsrc
           make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 vendor/pipa_stock_defconfig
           cp out/.config out/config-generated
           grep -E \
@@ -95,6 +104,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cd buildsrc
           make -j2 O=out \
             ARCH=arm64 \
             LLVM=1 \
@@ -111,16 +121,16 @@ jobs:
           short_sha="${GITHUB_SHA::8}"
           name="N0-CLANG20-pipa-${short_sha}"
           mkdir -p artifacts
-          cp out/arch/arm64/boot/Image "artifacts/${name}-Image"
-          cp out/arch/arm64/boot/dtb "artifacts/${name}-dtb"
-          cp out/arch/arm64/boot/dtbo.img "artifacts/${name}-dtbo.img"
-          cp out/.config "artifacts/${name}-config"
-          cp out/config-generated "artifacts/${name}-stock-generated-config"
-          cp out/config-key-values.txt "artifacts/${name}-config-key-values.txt"
-          cp out/config-provenance.txt "artifacts/${name}-config-provenance.txt"
-          cp out/kernel_compile.log "artifacts/${name}-compile.log"
+          cp buildsrc/out/arch/arm64/boot/Image "artifacts/${name}-Image"
+          cp buildsrc/out/arch/arm64/boot/dtb "artifacts/${name}-dtb"
+          cp buildsrc/out/arch/arm64/boot/dtbo.img "artifacts/${name}-dtbo.img"
+          cp buildsrc/out/.config "artifacts/${name}-config"
+          cp buildsrc/out/config-generated "artifacts/${name}-stock-generated-config"
+          cp buildsrc/out/config-key-values.txt "artifacts/${name}-config-key-values.txt"
+          cp buildsrc/out/config-provenance.txt "artifacts/${name}-config-provenance.txt"
+          cp buildsrc/out/kernel_compile.log "artifacts/${name}-compile.log"
           cp toolchain.txt "artifacts/${name}-toolchain.txt"
-          cp out/System.map "artifacts/${name}-System.map"
+          cp buildsrc/out/System.map "artifacts/${name}-System.map"
           strings "artifacts/${name}-Image" |
             grep -m1 '^Linux version ' |
             tee "artifacts/${name}-kernel-version.txt"
@@ -137,10 +147,13 @@ jobs:
         with:
           name: N0-CLANG20-failure-${{ github.sha }}
           path: |
-            out/kernel_compile.log
-            out/.config
+            buildsrc/out/kernel_compile.log
+            buildsrc/out/.config
+            buildsrc/out/config-key-values.txt
+            buildsrc/out/config-provenance.txt
             toolchain.txt
           if-no-files-found: warn
+          include-hidden-files: true
           retention-days: 14
 
       - name: Upload reproducible kernel
