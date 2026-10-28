@@ -22,6 +22,7 @@ jobs:
       SUBARCH: arm64
       LOCALVERSION: "-N0-kernel+"
       KCFLAGS: "-DCONFIG_LITTLE_CPU_MASK=15 -DCONFIG_BIG_CPU_MASK=112 -DCONFIG_PRIME_CPU_MASK=128"
+      KCONFIG_NOSILENTUPDATE: "1"
       KBUILD_BUILD_USER: joeyzhu
       KBUILD_BUILD_HOST: ubuntu
       KBUILD_BUILD_VERSION: "8"
@@ -93,6 +94,17 @@ jobs:
           grep -E \
             '^CONFIG_(CC_VERSION_TEXT|CLANG_VERSION|LLD_VERSION|LOCALVERSION|LTO|THINLTO|LTO_CLANG|CFI|CFI_CLANG|SHADOW_CALL_STACK|LITTLE_CPU_MASK|BIG_CPU_MASK|PRIME_CPU_MASK)=' \
             out/.config | tee out/config-key-values.txt
+          sed -i \
+            -e '/^CONFIG_LITTLE_CPU_MASK=$/d' \
+            -e '/^CONFIG_BIG_CPU_MASK=$/d' \
+            -e '/^CONFIG_PRIME_CPU_MASK=$/d' \
+            out/.config out/include/config/auto.conf
+          sed -i \
+            -e '/^#define CONFIG_LITTLE_CPU_MASK /d' \
+            -e '/^#define CONFIG_BIG_CPU_MASK /d' \
+            -e '/^#define CONFIG_PRIME_CPU_MASK /d' \
+            out/include/generated/autoconf.h
+          touch out/include/config/auto.conf out/include/generated/autoconf.h
           {
             echo "source_commit=$(git rev-parse HEAD)"
             echo "stock_config_sha256=$(sha256sum arch/arm64/configs/vendor/pipa_stock_defconfig | cut -d' ' -f1)"
@@ -109,6 +121,7 @@ jobs:
             ARCH=arm64 \
             LLVM=1 \
             LLVM_IAS=1 \
+            KCONFIG_NOSILENTUPDATE=1 \
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
             LOCALVERSION=-N0-kernel+ \
