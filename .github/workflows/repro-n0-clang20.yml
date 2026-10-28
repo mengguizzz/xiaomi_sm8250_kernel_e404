@@ -98,13 +98,16 @@ jobs:
             -e '/^CONFIG_LITTLE_CPU_MASK=$/d' \
             -e '/^CONFIG_BIG_CPU_MASK=$/d' \
             -e '/^CONFIG_PRIME_CPU_MASK=$/d' \
-            out/.config out/include/config/auto.conf
+            out/include/config/auto.conf
           sed -i \
             -e '/^#define CONFIG_LITTLE_CPU_MASK /d' \
             -e '/^#define CONFIG_BIG_CPU_MASK /d' \
             -e '/^#define CONFIG_PRIME_CPU_MASK /d' \
             out/include/generated/autoconf.h
-          touch out/include/config/auto.conf out/include/generated/autoconf.h
+          touch \
+            out/include/config/auto.conf \
+            out/include/config/auto.conf.cmd \
+            out/include/generated/autoconf.h
           {
             echo "source_commit=$(git rev-parse HEAD)"
             echo "stock_config_sha256=$(sha256sum arch/arm64/configs/vendor/pipa_stock_defconfig | cut -d' ' -f1)"
