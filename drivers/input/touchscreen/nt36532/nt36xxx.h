@@ -167,6 +167,7 @@ struct nvt_ts_data {
 #if defined(NVT_PEN_CONNECT_STRATEGY)
 	struct work_struct pen_charge_state_change_work;
 	struct notifier_block pen_charge_state_notifier;
+	int pen_mode_value;
 	bool pen_bluetooth_connect;
 	bool pen_charge_connect;
 	bool game_mode_enable;
@@ -220,6 +221,8 @@ struct nvt_ts_data {
 	uint8_t *xbuf;
 	struct mutex xbuf_lock;
 	bool irq_enabled;
+	bool irq_wake_enabled;
+	bool force_fw_reload;
 	bool pen_support;
 	bool stylus_resol_double;
 	bool fw_debug;
