@@ -1,0 +1,150 @@
+name: Reproduce n0_17 with Clang 20.1.8
+
+on:
+  push:
+    branches:
+      - n0-repro-clang20
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: n0_17 / Ubuntu Clang 20.1.8-2ubuntu8
+    runs-on: ubuntu-24.04
+    container:
+      image: ubuntu:resolute
+    timeout-minutes: 240
+
+    env:
+      ARCH: arm64
+      SUBARCH: arm64
+      LOCALVERSION: "-N0-kernel+"
+      KBUILD_BUILD_USER: joeyzhu
+      KBUILD_BUILD_HOST: ubuntu
+      KBUILD_BUILD_VERSION: "8"
+
+    steps:
+      - name: Bootstrap pinned Ubuntu snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          snapshot="https://snapshot.ubuntu.com/ubuntu/20260310T160533Z"
+          printf '%s\n' \
+            "deb [trusted=yes] $snapshot resolute main universe" \
+            "deb [trusted=yes] $snapshot resolute-updates main universe" \
+            "deb [trusted=yes] $snapshot resolute-security main universe" \
+            > /etc/apt/sources.list.d/repro.list
+          rm -f /etc/apt/sources.list
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates git
+
+      - name: Checkout exact n0_17 source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Install exact compiler and build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            bc bison build-essential cpio curl flex gcc-aarch64-linux-gnu \
+            libelf-dev libssl-dev libncurses-dev lz4 patchelf python3 rsync \
+            unzip wget xz-utils zip zstd \
+            clang-20=1:20.1.8-2ubuntu8 \
+            lld-20=1:20.1.8-2ubuntu8 \
+            llvm-20=1:20.1.8-2ubuntu8
+          echo "/usr/lib/llvm-20/bin" >> "$GITHUB_PATH"
+
+      - name: Verify exact source and toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "46640d7de1d86f12c17bb490c4dba685a5f5738b"
+          clang --version | tee toolchain.txt
+          ld.lld --version | tee -a toolchain.txt
+          grep -q "Ubuntu clang version 20.1.8 (2ubuntu8)" toolchain.txt
+          grep -q "LLD 20.1.8" toolchain.txt
+
+      - name: Configure from the original full stock config
+        shell: bash
+        run: |
+          set -euo pipefail
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 vendor/pipa_stock_defconfig
+          cp out/.config out/config-generated
+          grep -E \
+            '^CONFIG_(CC_VERSION_TEXT|CLANG_VERSION|LLD_VERSION|LOCALVERSION|LTO|THINLTO|LTO_CLANG|CFI|CFI_CLANG|SHADOW_CALL_STACK|LITTLE_CPU_MASK|BIG_CPU_MASK|PRIME_CPU_MASK)=' \
+            out/.config | tee out/config-key-values.txt
+          {
+            echo "source_commit=$(git rev-parse HEAD)"
+            echo "stock_config_sha256=$(sha256sum arch/arm64/configs/vendor/pipa_stock_defconfig | cut -d' ' -f1)"
+            echo "expected_original_config_sha256=08be7c516fde7cdd5f40bb210ffa5c05cf0843d9a006e97186ce754fee8c3ebe"
+            echo "generated_config_sha256=$(sha256sum out/.config | cut -d' ' -f1)"
+          } | tee out/config-provenance.txt
+
+      - name: Build Image, DTB, and DTBO
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -j2 O=out \
+            ARCH=arm64 \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
+            LOCALVERSION=-N0-kernel+ \
+            2>&1 | tee out/kernel_compile.log
+
+      - name: Verify and package kernel artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          short_sha="${GITHUB_SHA::8}"
+          name="N0-CLANG20-pipa-${short_sha}"
+          mkdir -p artifacts
+          cp out/arch/arm64/boot/Image "artifacts/${name}-Image"
+          cp out/arch/arm64/boot/dtb "artifacts/${name}-dtb"
+          cp out/arch/arm64/boot/dtbo.img "artifacts/${name}-dtbo.img"
+          cp out/.config "artifacts/${name}-config"
+          cp out/config-generated "artifacts/${name}-stock-generated-config"
+          cp out/config-key-values.txt "artifacts/${name}-config-key-values.txt"
+          cp out/config-provenance.txt "artifacts/${name}-config-provenance.txt"
+          cp out/kernel_compile.log "artifacts/${name}-compile.log"
+          cp toolchain.txt "artifacts/${name}-toolchain.txt"
+          cp out/System.map "artifacts/${name}-System.map"
+          strings "artifacts/${name}-Image" |
+            grep -m1 '^Linux version ' |
+            tee "artifacts/${name}-kernel-version.txt"
+          (
+            cd artifacts
+            sha256sum ./* > SHA256SUMS
+            zip -9 "../${name}.zip" ./*
+          )
+          sha256sum "${name}.zip" > "${name}.zip.sha256"
+
+      - name: Upload compile log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: N0-CLANG20-failure-${{ github.sha }}
+          path: |
+            out/kernel_compile.log
+            out/.config
+            toolchain.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload reproducible kernel
+        uses: actions/upload-artifact@v4
+        with:
+          name: N0-CLANG20-pipa-${{ github.sha }}
+          path: |
+            artifacts/**
+            N0-CLANG20-pipa-*.zip
+            N0-CLANG20-pipa-*.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
