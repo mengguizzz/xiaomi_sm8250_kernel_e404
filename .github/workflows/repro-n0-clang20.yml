@@ -44,7 +44,7 @@ jobs:
       - name: Checkout exact n0_17 source
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           submodules: recursive
 
       - name: Install exact compiler and build dependencies
@@ -65,10 +65,10 @@ jobs:
         run: |
           set -euo pipefail
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git merge-base --is-ancestor \
-            46640d7de1d86f12c17bb490c4dba685a5f5738b HEAD
+          git fetch --depth=1 origin \
+            46640d7de1d86f12c17bb490c4dba685a5f5738b
           git diff --quiet \
-            46640d7de1d86f12c17bb490c4dba685a5f5738b HEAD -- \
+            FETCH_HEAD HEAD -- \
             . ':!.github/workflows'
           clang --version | tee toolchain.txt
           ld.lld --version | tee -a toolchain.txt
