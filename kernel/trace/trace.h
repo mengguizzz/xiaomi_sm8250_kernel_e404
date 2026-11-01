@@ -1411,8 +1411,10 @@ event_trigger_unlock_commit(struct trace_event_file *file,
 	enum event_trigger_type tt = ETT_NONE;
 
 	if (!__event_trigger_test_discard(file, buffer, event, entry, &tt)) {
-		if (len)
-			stm_log(OST_ENTITY_FTRACE_EVENTS, entry, len);
+#ifdef CONFIG_STM
+			if (len)
+				stm_log(OST_ENTITY_FTRACE_EVENTS, entry, len);
+#endif
 
 		trace_buffer_unlock_commit(file->tr, buffer, event, irq_flags, pc);
 	}
