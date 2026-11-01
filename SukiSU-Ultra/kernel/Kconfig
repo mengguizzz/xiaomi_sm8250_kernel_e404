@@ -4,6 +4,7 @@ config KSU
 	tristate "KernelSU function support"
 	depends on KPROBES && EXT4_FS
 	select TRACING
+	select TRACE_GPU_MEM
 	default y
 	help
 	  Enable kernel-level root privileges on Android System.
