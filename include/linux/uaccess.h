@@ -323,6 +323,11 @@ extern long __probe_kernel_read(void *dst, const void *src, size_t size);
  * happens, handle that and return -EFAULT.
  */
 extern long probe_user_read(void *dst, const void __user *src, size_t size);
+static __always_inline long
+copy_from_user_nofault(void *dst, const void __user *src, size_t size)
+{
+	return probe_user_read(dst, src, size);
+}
 
 /*
  * probe_kernel_write(): safely attempt to write to a location
@@ -335,6 +340,20 @@ extern long probe_user_read(void *dst, const void __user *src, size_t size);
  */
 extern long notrace probe_kernel_write(void *dst, const void *src, size_t size);
 extern long notrace __probe_kernel_write(void *dst, const void *src, size_t size);
+extern long notrace probe_user_write(void __user *dst, const void *src,
+				     size_t size);
+
+static __always_inline long
+copy_to_user_nofault(void __user *dst, const void *src, size_t size)
+{
+	return probe_user_write(dst, src, size);
+}
+
+static __always_inline long notrace
+copy_to_kernel_nofault(void *dst, const void *src, size_t size)
+{
+	return probe_kernel_write(dst, src, size);
+}
 
 /*
  * probe_user_write(): safely attempt to write to a location in user space
@@ -352,6 +371,8 @@ extern long strncpy_from_unsafe(char *dst, const void *unsafe_addr, long count);
 extern long strncpy_from_unsafe_strict(char *dst, const void *unsafe_addr,
 				       long count);
 extern long __strncpy_from_unsafe(char *dst, const void *unsafe_addr, long count);
+extern long strncpy_from_unsafe_user(char *dst, const void __user *unsafe_addr,
+				     long count);
 long strncpy_from_user_nofault(char *dst, const void __user *unsafe_addr,
 		long count);
 extern long strnlen_unsafe_user(const void __user *unsafe_addr, long count);
