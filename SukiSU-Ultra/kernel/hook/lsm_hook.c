@@ -144,6 +144,11 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid)
         ksu_install_fd();
         return 0;
     }
+    if (cur_uid == 0 && ksu_is_allow_uid_for_current(ruid)) {
+        disable_seccomp();
+        return 0;
+    }
+
 
     if (cur_uid != 0)
         return 0;
