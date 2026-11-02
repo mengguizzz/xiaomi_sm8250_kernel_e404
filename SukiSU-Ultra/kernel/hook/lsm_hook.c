@@ -44,6 +44,7 @@ static int handle_zygote_setresuid(uid_t ruid) {
     // - Disable seccomp restriction for KSU manager since running with "su" will disable seccomp anyway
     if (likely(ksu_is_manager_appid_valid()) && unlikely(is_uid_manager(ruid))) {
         disable_seccomp();
+        ksu_load_allow_list();
         pr_info("install fd for manager: %d\n", ruid);
         ksu_install_fd();
         return 0;
@@ -134,6 +135,7 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid)
     uid_t cur_uid = current_uid().val;
 
     if (likely(ksu_is_manager_appid_valid()) && unlikely(is_uid_manager(ruid))) {
+        ksu_load_allow_list();
         disable_seccomp();
         pr_info("install fd for manager before setresuid: %d\n", ruid);
         ksu_install_fd();
