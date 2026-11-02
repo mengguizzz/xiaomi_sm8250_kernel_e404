@@ -1002,7 +1002,9 @@ void taskstats_exit(struct task_struct *tsk, int group_dead)
 	if (!stats)
 		goto err;
 
+	spin_lock_irq(&tsk->sighand->siglock);
 	memcpy(stats, tsk->signal->stats, sizeof(*stats));
+	spin_unlock_irq(&tsk->sighand->siglock);
 
 send:
 	send_cpu_listeners(rep_skb, listeners);
