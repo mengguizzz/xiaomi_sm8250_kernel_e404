@@ -192,6 +192,26 @@ const struct mtk_chip_config spi_ctrdata = {
 #endif
 
 static uint8_t bTouchIsAwake = 0;
+static struct delayed_work nvt_irq_monitor_work;
+
+static void nvt_irq_monitor_func(struct work_struct *work)
+{
+	static int last_value = -1;
+	int value;
+
+	if (!ts)
+		return;
+
+	value = gpio_get_value(ts->irq_gpio);
+	if (value != last_value) {
+		NVT_LOG("irq monitor: gpio=%d, irq_enabled=%d\n",
+			value, ts->irq_enabled);
+		last_value = value;
+	}
+
+	schedule_delayed_work(&nvt_irq_monitor_work,
+			      msecs_to_jiffies(1000));
+}
 
 /*******************************************************
 Description:
@@ -3401,6 +3421,9 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	NVT_LOG("end\n");
 
 	nvt_irq_enable(true);
+	INIT_DELAYED_WORK(&nvt_irq_monitor_work, nvt_irq_monitor_func);
+	schedule_delayed_work(&nvt_irq_monitor_work,
+			      msecs_to_jiffies(1000));
 
 	return 0;
 
