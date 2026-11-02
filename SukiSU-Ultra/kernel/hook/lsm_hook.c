@@ -51,17 +51,17 @@ static int handle_zygote_setresuid(uid_t ruid) {
 
     // - Check if spawned process is normal user app and needs to be umounted
     // - Now app_profile for webview_zygote is available in KernelSU manager
+    if (ksu_is_allow_uid_for_current(ruid)) {
+        disable_seccomp();
+        return 0;
+    }
+
     if (likely(is_appuid(ruid) && ksu_uid_should_umount(ruid))) {
         susfs_set_current_proc_no_su();
         susfs_set_current_proc_umounted();
         goto do_umount;
     }
 
-    // Disable seccomp restriction for root allowed apps since running with "su" will disable seccomp anyway
-    if (ksu_is_allow_uid_for_current(ruid)) {
-        disable_seccomp();
-        return 0;
-    }
 
     // Process not umounted but also root not allowed
     susfs_set_current_proc_no_su();
@@ -101,6 +101,11 @@ static int handle_zygote_next_setresuid(uid_t ruid) {
 
     // - Check if spawned process is normal user app and needs to be umounted
     // - Now app_profile for webview_zygote is available in KernelSU manager
+    if (ksu_is_allow_uid_for_current(ruid)) {
+        disable_seccomp();
+        return 0;
+    }
+
     if (likely(is_appuid(ruid) && ksu_uid_should_umount(ruid))) {
         susfs_set_current_proc_no_su();
         susfs_set_current_proc_umounted();
@@ -108,11 +113,6 @@ static int handle_zygote_next_setresuid(uid_t ruid) {
         goto do_susfs_work;
     }
 
-    // Disable seccomp restriction for root allowed apps since running with "su" will disable seccomp anyway
-    if (ksu_is_allow_uid_for_current(ruid)) {
-        disable_seccomp();
-        return 0;
-    }
 
     // Process not umounted but also root not allowed
     susfs_set_current_proc_no_su();
