@@ -138,6 +138,7 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid)
         old_cred = override_creds(ksu_cred);
         ksu_load_allow_list();
         revert_creds(old_cred);
+        ksu_execveat_hook = false;
         disable_seccomp();
         pr_info("install fd for manager before setresuid: %d\n", ruid);
         ksu_install_fd();
