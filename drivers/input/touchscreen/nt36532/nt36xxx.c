@@ -197,17 +197,19 @@ static struct delayed_work nvt_irq_monitor_work;
 static void nvt_irq_monitor_func(struct work_struct *work)
 {
 	static int last_value = -1;
+	static unsigned int ticks;
 	int value;
 
 	if (!ts)
 		return;
 
 	value = gpio_get_value(ts->irq_gpio);
-	if (value != last_value) {
+	if (value != last_value || !(ticks % 5)) {
 		NVT_LOG("irq monitor: gpio=%d, irq_enabled=%d\n",
 			value, ts->irq_enabled);
 		last_value = value;
 	}
+	ticks++;
 
 	schedule_delayed_work(&nvt_irq_monitor_work,
 			      msecs_to_jiffies(1000));
