@@ -31,6 +31,18 @@
 
 #define SUKI_CMD_NOT_SUPPORTED 126
 
+static void susfs_extra_work_noop(struct work_struct *work)
+{
+}
+
+DECLARE_WORK(susfs_extra_works, susfs_extra_work_noop);
+
+int susfs_add_sus_avd_allowed_by_type(u32 s_type, u32 t_type, u16 type,
+				      u32 orig_avd_allowed)
+{
+	return -EOPNOTSUPP;
+}
+
 struct suki_susfs_path {
 	char target_pathname[256];
 	int err;
