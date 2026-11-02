@@ -133,6 +133,13 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid)
 {
     uid_t cur_uid = current_uid().val;
 
+    if (likely(ksu_is_manager_appid_valid()) && unlikely(is_uid_manager(ruid))) {
+        disable_seccomp();
+        pr_info("install fd for manager before setresuid: %d\n", ruid);
+        ksu_install_fd();
+        return 0;
+    }
+
     if (cur_uid != 0)
         return 0;
 
