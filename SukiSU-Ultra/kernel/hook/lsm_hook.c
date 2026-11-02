@@ -146,6 +146,16 @@ int ksu_handle_setresuid(uid_t ruid, uid_t euid, uid_t suid)
     return 0;
 
 }
+
+static int ksu_task_fix_setuid_susfs(struct cred *new,
+				     const struct cred *old, int flags)
+{
+	if (unlikely(!new || !old))
+		return 0;
+
+	return ksu_handle_setresuid(new->uid.val, new->euid.val,
+				    new->suid.val);
+}
 #else
 static int ksu_task_fix_setuid(struct cred *new, const struct cred *old, int flags)
 {
@@ -180,7 +190,9 @@ static struct security_hook_list ksu_hooks[] = {
     defined(CONFIG_KSU_ALLOWLIST_WORKAROUND)
     LSM_HOOK_INIT(key_permission, ksu_key_permission),
 #endif
-#ifndef CONFIG_KSU_SUSFS
+#ifdef CONFIG_KSU_SUSFS
+    LSM_HOOK_INIT(task_fix_setuid, ksu_task_fix_setuid_susfs),
+#else
     LSM_HOOK_INIT(task_fix_setuid, ksu_task_fix_setuid),
 #endif
     LSM_HOOK_INIT(file_permission, ksu_mount_hide_file_permission),
