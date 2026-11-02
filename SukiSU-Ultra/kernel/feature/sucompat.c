@@ -304,7 +304,9 @@ int ksu_handle_execve_sucompat(int *fd, const char __user **filename_user, void 
         return 0;
 
     pending_root_execve =
-        ksu_sulog_capture_sucompat(*filename_user, *((struct user_arg_ptr *)argv), GFP_KERNEL);
+        ksu_sulog_capture_sucompat(*filename_user,
+                                   (struct user_arg_ptr *)argv,
+                                   GFP_KERNEL);
 
     ret = ksu_sucompat_user_common(filename_user, "sys_execve", true);
     ksu_sulog_emit_pending(pending_root_execve, ret, GFP_KERNEL);
@@ -324,7 +326,9 @@ int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr, void *
         return 0;
 
     pending_root_execve =
-        ksu_sulog_capture_sucompat((*filename_ptr)->name, *((struct user_arg_ptr *)argv), GFP_KERNEL);
+        ksu_sulog_capture_sucompat((*filename_ptr)->name,
+                                   (struct user_arg_ptr *)argv,
+                                   GFP_KERNEL);
 
     ret = escape_with_root_profile();
     ksu_sulog_emit_pending(pending_root_execve, ret, GFP_KERNEL);

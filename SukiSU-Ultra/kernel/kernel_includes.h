@@ -77,6 +77,42 @@
 #ifdef CONFIG_KSU_SUSFS
 #include <linux/susfs.h>
 #include <linux/susfs_def.h>
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+static inline bool susfs_starts_with(const char *str, const char *prefix)
+{
+	return strncmp(str, prefix, strlen(prefix)) == 0;
+}
+
+static inline bool susfs_ends_with(const char *str, const char *suffix)
+{
+	size_t str_len = strlen(str);
+	size_t suffix_len = strlen(suffix);
+
+	return str_len >= suffix_len &&
+	       memcmp(str + str_len - suffix_len, suffix, suffix_len) == 0;
+}
+
+static inline void susfs_set_current_proc_no_su(void)
+{
+	susfs_set_current_non_root_user_app_proc();
+}
+
+static inline void susfs_set_current_proc_umounted(void)
+{
+	susfs_set_current_non_root_user_app_proc();
+}
+
+static inline void susfs_set_current_proc_umounted_for_zygote_next(void)
+{
+	susfs_set_current_non_root_user_app_proc();
+}
+
+static inline bool susfs_is_current_proc_umounted(void)
+{
+	return susfs_is_current_non_root_user_app_proc();
+}
+#endif
 #endif
 
 // versioned / conditional
