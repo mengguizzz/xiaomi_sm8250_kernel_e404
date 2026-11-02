@@ -101,6 +101,9 @@
 #include "manager/pkg_observer.c"
 
 #include "supercall/perm.c"
+#ifdef CONFIG_KSU_SUSFS
+#include "supercall/susfs_compat.c"
+#endif
 #include "supercall/dispatch.c"
 #include "supercall/supercall.c"
 

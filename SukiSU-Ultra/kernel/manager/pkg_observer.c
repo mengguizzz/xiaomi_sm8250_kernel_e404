@@ -20,8 +20,10 @@ static void ksu_track_throne_tw_func(struct callback_head *cb)
     if (current->flags & PF_EXITING)
         return;
     track_throne(false);
-    // Renew the priority uid bitmap filter
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+    /* The 4.19 SUSFS variant predates the priority UID filter API. */
     susfs_parse_priority_app_strings();
+#endif
 }
 
 // Never scan from the fsnotify handler: fsnotify_mark_srcu and the rename's dir
@@ -33,8 +35,9 @@ static void ksu_defer_track_throne(void)
 {
     struct callback_head *cb;
 
-    // Renew the getpriority uid bitmap filter
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
     susfs_parse_priority_app_strings();
+#endif
 
     if (!(current->flags & PF_KTHREAD)) {
         cb = kzalloc(sizeof(*cb), GFP_KERNEL);
