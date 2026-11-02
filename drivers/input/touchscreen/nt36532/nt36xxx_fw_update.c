@@ -883,6 +883,7 @@ void Boot_Update_Firmware(struct work_struct *work)
 		nvt_update_firmware(ts->fw_name);
 	}
 	nvt_get_fw_info();
+	nvt_check_fw_reset_state(RESET_STATE_REK);
 	mutex_unlock(&ts->lock);
 	switch_pen_input_device();
 }
