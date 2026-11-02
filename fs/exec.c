@@ -1994,21 +1994,36 @@ extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr,
 extern int ksu_handle_execveat_sucompat(int *fd,
 					struct filename **filename_ptr,
 					void *argv, void *envp, int *flags);
+extern int ksu_handle_post_execveat_sucompat(int *fd,
+					struct filename **filename_ptr,
+					void *argv, void *envp,
+					int *flags, int *retval);
 #endif
 
 static int do_execveat_common(int fd, struct filename *filename,
-			      struct user_arg_ptr argv,
-			      struct user_arg_ptr envp,
-			      int flags)
+                         struct user_arg_ptr argv,
+                         struct user_arg_ptr envp,
+                         int flags)
 {
+    int ret;
 #ifdef CONFIG_KSU
-	if (unlikely(ksu_execveat_hook))
-		ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
-	else
-		ksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp,
-					     &flags);
+    int ksu_ret;
+
+    if (unlikely(ksu_execveat_hook))
+        ksu_ret = ksu_handle_execveat(&fd, &filename, &argv, &envp, &flags);
+    else
+        ksu_ret = ksu_handle_execveat_sucompat(&fd, &filename, &argv, &envp,
+                                                &flags);
 #endif
-	return __do_execve_file(fd, filename, argv, envp, flags, NULL);
+
+    ret = __do_execve_file(fd, filename, argv, envp, flags, NULL);
+
+#ifdef CONFIG_KSU
+    if (!ksu_ret)
+        ksu_handle_post_execveat_sucompat(NULL, NULL, NULL, NULL, NULL, &ret);
+#endif
+
+    return ret;
 }
 
 int do_execve_file(struct file *file, void *__argv, void *__envp)
