@@ -102,7 +102,7 @@ static void show_type(struct seq_file *m, struct super_block *sb)
 	}
 }
 
-static int show_vfsmnt(struct seq_file *m, struct vfsmount *mnt)
+int show_vfsmnt(struct seq_file *m, struct vfsmount *mnt)
 {
 	struct proc_mounts *p = m->private;
 	struct mount *r = real_mount(mnt);
@@ -144,7 +144,7 @@ out:
 	return err;
 }
 
-static int show_mountinfo(struct seq_file *m, struct vfsmount *mnt)
+int show_mountinfo(struct seq_file *m, struct vfsmount *mnt)
 {
 	struct proc_mounts *p = m->private;
 	struct mount *r = real_mount(mnt);
@@ -214,7 +214,7 @@ out:
 	return err;
 }
 
-static int show_vfsstat(struct seq_file *m, struct vfsmount *mnt)
+int show_vfsstat(struct seq_file *m, struct vfsmount *mnt)
 {
 	struct proc_mounts *p = m->private;
 	struct mount *r = real_mount(mnt);
