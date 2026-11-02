@@ -362,7 +362,11 @@ pid_t sys_vfork(void)
 		.exit_signal	= SIGCHLD,
 	};
 
+	#if defined(__NR_clone3)
 	return my_syscall2(__NR_clone3, &args, sizeof(args));
+#else
+	return my_syscall5(__NR_clone, CLONE_VM | CLONE_VFORK | SIGCHLD, 0, 0, 0, 0);
+#endif
 #endif
 }
 #endif
