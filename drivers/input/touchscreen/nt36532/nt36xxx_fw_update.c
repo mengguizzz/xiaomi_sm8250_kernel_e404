@@ -884,6 +884,8 @@ void Boot_Update_Firmware(struct work_struct *work)
 	}
 	nvt_get_fw_info();
 	nvt_check_fw_reset_state(RESET_STATE_NORMAL_RUN);
+	NVT_LOG("enable touch sensor after firmware boot\n");
+	nvt_write_addr(ts->mmap->EVENT_BUF_ADDR | EVENT_MAP_HOST_CMD, 0x15);
 	mutex_unlock(&ts->lock);
 	switch_pen_input_device();
 }
