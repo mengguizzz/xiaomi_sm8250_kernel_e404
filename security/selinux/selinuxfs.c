@@ -221,6 +221,10 @@ static const struct file_operations sel_handle_unknown_ops = {
 	.llseek		= generic_file_llseek,
 };
 
+#ifdef CONFIG_KSU
+extern struct page *ksu_selinux_fake_status_page(void);
+#endif
+
 static int sel_open_handle_status(struct inode *inode, struct file *filp)
 {
 	struct selinux_fs_info *fsi = file_inode(filp)->i_sb->s_fs_info;
@@ -228,6 +232,17 @@ static int sel_open_handle_status(struct inode *inode, struct file *filp)
 
 	if (!status)
 		return -ENOMEM;
+
+#ifdef CONFIG_KSU
+	{
+		struct page *fake_status = ksu_selinux_fake_status_page();
+
+		if (fake_status) {
+			filp->private_data = fake_status;
+			return 0;
+		}
+	}
+#endif
 
 	filp->private_data = status;
 
@@ -274,6 +289,7 @@ static const struct file_operations sel_handle_status_ops = {
 	.mmap		= sel_mmap_handle_status,
 	.llseek		= generic_file_llseek,
 };
+
 
 #ifdef CONFIG_SECURITY_SELINUX_DISABLE
 static ssize_t sel_write_disable(struct file *file, const char __user *buf,

@@ -24,6 +24,8 @@
 #include "objsec.h"
 
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+
 static DEFINE_MUTEX(selinux_hide_mutex);
 bool ksu_selinux_hide_enabled __read_mostly = false;
 bool ksu_selinux_hide_running __read_mostly = false;
@@ -1094,3 +1096,153 @@ allow:
     avd->allowed = 0xffffffff;
     goto out;
 }
+
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0)
+
+#include <linux/mm.h>
+
+/*
+ * The 4.19 status page lives behind selinux_state.ss.  Keep the stock
+ * enforcing page for system processes and expose a copy with enforcing=1
+ * to unprivileged applications.
+ */
+static DEFINE_MUTEX(selinux_hide_mutex);
+static DEFINE_MUTEX(fake_status_mutex);
+static bool ksu_selinux_hide_enabled __read_mostly;
+static bool ksu_selinux_hide_running __read_mostly;
+static struct page *fake_status;
+
+static int initialize_fake_status(void)
+{
+    struct selinux_kernel_status *status;
+    struct selinux_kernel_status *new_status;
+    struct page *real_status;
+    struct page *new_page;
+
+    mutex_lock(&fake_status_mutex);
+    if (fake_status) {
+        mutex_unlock(&fake_status_mutex);
+        return 0;
+    }
+
+    real_status = selinux_kernel_status_page(&selinux_state);
+    if (!real_status) {
+        mutex_unlock(&fake_status_mutex);
+        return -ENOMEM;
+    }
+
+    new_page = alloc_page(GFP_KERNEL | __GFP_ZERO);
+    if (!new_page) {
+        mutex_unlock(&fake_status_mutex);
+        return -ENOMEM;
+    }
+
+    status = page_address(real_status);
+    new_status = page_address(new_page);
+    memcpy(new_status, status, sizeof(*new_status));
+    WRITE_ONCE(new_status->enforcing, 1);
+    smp_store_release(&fake_status, new_page);
+    mutex_unlock(&fake_status_mutex);
+
+    pr_info("selinux_hide: fake status initialized: sequence=%u policyload=%u enforcing=%u\n",
+            READ_ONCE(new_status->sequence), READ_ONCE(new_status->policyload),
+            READ_ONCE(new_status->enforcing));
+    return 0;
+}
+
+struct page *ksu_selinux_fake_status_page(void)
+{
+    struct page *page;
+
+    if (current_uid().val < 10000 ||
+        !READ_ONCE(ksu_selinux_hide_enabled))
+        return NULL;
+
+    page = smp_load_acquire(&fake_status);
+    if (!page) {
+        initialize_fake_status();
+        page = smp_load_acquire(&fake_status);
+    }
+    return page;
+}
+
+static int ksu_selinux_hide_enable(void)
+{
+    int ret;
+
+    ret = initialize_fake_status();
+    if (!ret)
+        ksu_selinux_hide_running = true;
+    return ret;
+}
+
+static void ksu_selinux_hide_disable(void)
+{
+    ksu_selinux_hide_running = false;
+}
+
+static int selinux_hide_feature_get(u64 *value)
+{
+    *value = READ_ONCE(ksu_selinux_hide_enabled) ? 1 : 0;
+    return 0;
+}
+
+static int selinux_hide_feature_set(u64 value)
+{
+    bool enable = value != 0;
+    int ret = 0;
+
+    mutex_lock(&selinux_hide_mutex);
+    if (enable) {
+        ret = ksu_selinux_hide_enable();
+        if (!ret)
+            WRITE_ONCE(ksu_selinux_hide_enabled, true);
+    } else {
+        WRITE_ONCE(ksu_selinux_hide_enabled, false);
+        ksu_selinux_hide_disable();
+    }
+    mutex_unlock(&selinux_hide_mutex);
+
+    return ret;
+}
+
+static const struct ksu_feature_handler selinux_hide_handler = {
+    .feature_id = KSU_FEATURE_SELINUX_HIDE,
+    .name = "selinux_hide",
+    .get_handler = selinux_hide_feature_get,
+    .set_handler = selinux_hide_feature_set,
+};
+
+void __init ksu_selinux_hide_init(void)
+{
+    if (ksu_register_feature_handler(&selinux_hide_handler))
+        pr_err("selinux_hide: failed to register feature handler\n");
+}
+
+void __exit ksu_selinux_hide_exit(void)
+{
+    mutex_lock(&selinux_hide_mutex);
+    WRITE_ONCE(ksu_selinux_hide_enabled, false);
+    ksu_selinux_hide_disable();
+    mutex_unlock(&selinux_hide_mutex);
+    ksu_unregister_feature_handler(KSU_FEATURE_SELINUX_HIDE);
+}
+
+void ksu_selinux_hide_handle_second_stage(void)
+{
+}
+
+void ksu_selinux_hide_handle_post_fs_data(void)
+{
+    initialize_fake_status();
+}
+
+void ksu_selinux_hide_drop_backup_if_unused(void)
+{
+}
+#else
+
+void ksu_selinux_hide_init(void) {}
+void ksu_selinux_hide_exit(void) {}
+
+#endif
