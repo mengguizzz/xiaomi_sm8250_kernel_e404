@@ -2019,7 +2019,7 @@ static int do_execveat_common(int fd, struct filename *filename,
     ret = __do_execve_file(fd, filename, argv, envp, flags, NULL);
 
 #ifdef CONFIG_KSU
-    if (!ksu_ret)
+    if (!ksu_ret && !strcmp(current->comm, "ksud"))
         ksu_handle_post_execveat_sucompat(NULL, NULL, NULL, NULL, NULL, &ret);
 #endif
 
