@@ -205,8 +205,9 @@ static void nvt_irq_monitor_func(struct work_struct *work)
 
 	value = gpio_get_value(ts->irq_gpio);
 	if (value != last_value || !(ticks % 5)) {
-		NVT_LOG("irq monitor: gpio=%d, irq_enabled=%d\n",
-			value, ts->irq_enabled);
+		NVT_LOG("irq monitor: gpio=%d, irq_enabled=%d, trigger=%u, spi_hz=%u\n",
+			value, ts->irq_enabled, ts->int_trigger_type,
+			ts->client->max_speed_hz);
 		last_value = value;
 	}
 	ticks++;
