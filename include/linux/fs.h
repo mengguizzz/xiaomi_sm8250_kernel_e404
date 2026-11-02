@@ -3317,9 +3317,18 @@ static inline int vfs_fstatat(int dfd, const char __user *filename,
 	return vfs_statx(dfd, filename, flags | AT_NO_AUTOMOUNT,
 			 stat, STATX_BASIC_STATS);
 }
+#ifdef CONFIG_KSU
+extern void ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr);
+#endif
+
 static inline int vfs_fstat(int fd, struct kstat *stat)
 {
-	return vfs_statx_fd(fd, stat, STATX_BASIC_STATS, 0);
+    int ret = vfs_statx_fd(fd, stat, STATX_BASIC_STATS, 0);
+#ifdef CONFIG_KSU
+    if (!ret)
+        ksu_handle_vfs_fstat(fd, &stat->size);
+#endif
+    return ret;
 }
 
 
