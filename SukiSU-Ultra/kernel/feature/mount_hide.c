@@ -97,6 +97,12 @@ struct ksu_proc_mounts {
 
 typedef int (*ksu_show_fn)(struct seq_file *, struct vfsmount *);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+int show_vfsmnt(struct seq_file *m, struct vfsmount *mnt);
+int show_mountinfo(struct seq_file *m, struct vfsmount *mnt);
+int show_vfsstat(struct seq_file *m, struct vfsmount *mnt);
+#endif
+
 static DEFINE_MUTEX(ksu_mount_hide_mutex);
 static bool ksu_mount_hide_enabled __read_mostly = false;
 static bool ksu_mount_hide_running __read_mostly = false;
@@ -360,6 +366,12 @@ int ksu_mount_hide_file_permission(struct file *file, int mask)
 
 static int ksu_mount_hide_resolve(void)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
+	ksu_orig_show_vfsmnt = (ksu_show_fn)show_vfsmnt;
+	ksu_orig_show_mountinfo = (ksu_show_fn)show_mountinfo;
+	ksu_orig_show_vfsstat = (ksu_show_fn)show_vfsstat;
+	return 0;
+#else
     static const char *const names[] = {
         "show_vfsmnt",
         "show_mountinfo",
@@ -383,6 +395,7 @@ static int ksu_mount_hide_resolve(void)
     ksu_orig_show_mountinfo = (ksu_show_fn)addrs[1];
     ksu_orig_show_vfsstat = (ksu_show_fn)addrs[2];
     return 0;
+#endif
 }
 
 static int mount_hide_feature_get(u64 *value)
