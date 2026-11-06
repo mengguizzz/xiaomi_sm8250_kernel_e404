@@ -142,3 +142,10 @@ kernel/configs/android-*.cfg
 out/
 build.sh
 dtbo_build.sh
+
+# HyperOS 4 local build and packaging artifacts
+/KernelSU/
+/AnyKernel3/
+/out-*/
+/out.*
+/arch/arm64/configs/.pipa_hos4_defconfig.*

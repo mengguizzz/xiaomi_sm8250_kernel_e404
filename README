@@ -1,19 +1,160 @@
-Linux kernel
-============
+# E404 Kernel for Xiaomi Pad 6 (pipa) — HyperOS 4.0
 
-There are several guides for kernel developers and users. These guides can
-be rendered in a number of formats, like HTML and PDF. Please read
-Documentation/admin-guide/README.rst first.
+Stable HyperOS 4.0 port branch for the Xiaomi Pad 6 (`pipa`).
 
-In order to build the documentation, use ``make htmldocs`` or
-``make pdfdocs``.  The formatted documentation can also be read online at:
+This repository is based on the E404 `staging-bpf` kernel tree and carries the
+Android 16/17 backports, HyperOS input changes, and 4.19 compatibility work
+needed by this port.
 
-    https://www.kernel.org/doc/html/latest/
+```text
+Stable branch: HyperOS4.0-404-stable
+Base tree:     kvsnr113/xiaomi_sm8250_kernel_e404
+Base branch:   staging-bpf
+Device:        Xiaomi Pad 6 (pipa)
+Reference ROM: HyperOS 4.0.8.0
+Kernel source: Linux 4.19.404R
+SukiSU Ultra:  v4.3.0
+SUSFS:         v1.5.9
+```
 
-There are various text files in the Documentation/ subdirectory,
-several of them using the Restructured Text markup notation.
-See Documentation/00-INDEX for a list of what is contained in each file.
+The user-visible UTS release is intentionally spoofed for Android 16/17
+compatibility. The actual source base and build configuration are 4.19.
 
-Please read the Documentation/process/changes.rst file, as it contains the
-requirements for building and running the kernel, and information about
-the problems which may result by upgrading your kernel.
+## Included changes
+
+This branch includes the HyperOS 4 port bring-up and the following compatibility
+and reliability work:
+
+- Android 16/17 BPF instruction support, vendor hooks, and related tree-wide
+  backports.
+- HyperOS touch, pen connection strategy, refresh-rate switching, touch reset
+  recovery, and Xiaomi Pad 6 touchpad scale fixes.
+- Millet cgroup and binder support.
+- Built-in SukiSU Ultra v4.3.0 with SUSFS v1.5.9.
+- 4.19 SukiSU hooks for manager fd installation, seccomp handling, allowlist
+  loading, `init.rc` injection, and the preinit runner.
+- 4.19 SUSFS compatibility helpers and SELinux status hiding.
+- 4.19 `mount_hide` support. The three proc mount show helpers are linked
+  directly instead of relying on runtime kallsyms lookup.
+- PowerHAL compatibility sysctls:
+  - `sched_min_task_util_for_boost`, default `51`
+  - `sched_min_task_util_for_colocation`, default `35`
+
+`CONFIG_KSU_FEATURE_ADBROOT` and KPM are intentionally disabled. Some newer
+SUSFS features are not available in the pinned v1.5.9 implementation.
+
+## Configuration
+
+The complete, validated configuration is stored in:
+
+```text
+arch/arm64/configs/vendor/pipa_hos4_defconfig
+```
+
+Important options:
+
+```text
+CONFIG_KSU=y
+# CONFIG_KSU_FEATURE_ADBROOT is not set
+# CONFIG_KPM is not set
+
+CONFIG_KSU_SUSFS=y
+CONFIG_KSU_SUSFS_SUS_PATH=y
+CONFIG_KSU_SUSFS_SUS_MOUNT=y
+CONFIG_KSU_SUSFS_SUS_KSTAT=y
+CONFIG_KSU_SUSFS_SPOOF_UNAME=y
+CONFIG_KSU_SUSFS_ENABLE_LOG=y
+CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y
+CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y
+CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
+CONFIG_KSU_SUSFS_SUS_MAP=y
+
+CONFIG_SECCOMP=y
+CONFIG_SECCOMP_FILTER=y
+CONFIG_LTO_CLANG_THIN=y
+CONFIG_SCHED_TUNE_DUMMY=y
+# CONFIG_KALLSYMS is not set
+```
+
+## Build environment
+
+The validated build used:
+
+```text
+Ubuntu 26.04 LTS
+Ubuntu clang version 20.1.8
+Ubuntu LLD 20.1.8
+GNU aarch64 cross binutils
+LLVM=1
+LLVM_IAS=1
+```
+
+Install the usual kernel build dependencies and a matching Clang/LLD toolchain.
+The build also needs Python 3, bc, bison, flex, cpio, gzip, lz4, zstd, libssl,
+libelf, rsync, git, and `aarch64-linux-gnu-*` binutils.
+
+## Build
+
+Use a clean output directory. For this branch, export the kernel UAPI headers in
+the layout expected by the integrated SukiSU build:
+
+```sh
+export PATH="/usr/lib/llvm-20/bin:$PATH"
+
+make O=out ARCH=arm64 vendor/pipa_hos4_defconfig
+
+make O=out ARCH=arm64 \
+  headers_install \
+  INSTALL_HDR_PATH="$PWD/out/usr/out/usr"
+
+mv out/usr/out/usr/include out/usr/include
+mv out/usr/out/usr/techpack out/usr/techpack
+
+make O=out ARCH=arm64 \
+  CROSS_COMPILE=aarch64-linux-gnu- \
+  LLVM=1 LLVM_IAS=1 \
+  KSU_GITHUB_VER=4.3.0 \
+  -j"$(nproc)" Image
+```
+
+Output:
+
+```text
+out/arch/arm64/boot/Image
+```
+
+This is a raw ARM64 kernel `Image`, not an Android `boot.img`.
+
+## Packaging and installation
+
+Use an AnyKernel3 installer for recovery installation. The validated package
+uses the known-good `vendor_boot.img` and `dtbo.img` together with the new kernel
+Image. Do not write the raw `Image` directly to `boot`.
+
+Validated reference build from 2026-11-02:
+
+```text
+kernel SHA256:
+D716EDC785200D1F005BDF8E421095C1322BB76FF8AA16F46D506243E47AB1C8
+
+AnyKernel ZIP SHA256:
+AD5B6FD5BF102F291728F9AFA2CC694E9A7B4AD98745BC4A3625D0500FE5A20A
+```
+
+## ROM-side note
+
+The tested ROM uses a cleaned ODM image without the MSLG/PC Linux desktop
+support. On this 4.19 tree, file-backed loop devices returned `EIO` when backed
+by F2FS/EROFS, which caused `mslgrootfs` to restart repeatedly. The working
+fallback required staging the 475 MB image in tmpfs, increasing boot time and
+memory use. Removing MSLG from ODM was the safer choice for this ROM.
+
+This cleanup is separate from the kernel repository and is not applied by
+flashing the AnyKernel ZIP.
+
+## Credits
+
+- E404 kernel upstream and Android backports.
+- SukiSU Ultra and SUSFS contributors.
+- Xiaomi HyperOS input, pen, and touch driver references.
+- Previous n0 HyperOS 4 port work used as the compatibility baseline.
