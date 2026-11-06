@@ -153,6 +153,8 @@ static unsigned int __read_mostly sysctl_sched_group_downmigrate_pct = 95;
 
 static unsigned int sysctl_sched_boost;
 static unsigned int sysctl_sched_prefer_spread;
+static unsigned int sysctl_sched_min_task_util_for_boost = 51;
+static unsigned int sysctl_sched_min_task_util_for_colocation = 35;
 static unsigned int sysctl_sched_busy_hyst_enable_cpus;
 static unsigned int sysctl_sched_busy_hyst;
 static unsigned int sysctl_sched_ravg_window_nr_ticks;
@@ -410,6 +412,20 @@ static int bpf_stats_handler(struct ctl_table *table, int write,
 #endif
 
 static struct ctl_table kern_table[] = {
+	{
+		.procname	= "sched_min_task_util_for_boost",
+		.data		= &sysctl_sched_min_task_util_for_boost,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec,
+	},
+	{
+		.procname	= "sched_min_task_util_for_colocation",
+		.data		= &sysctl_sched_min_task_util_for_colocation,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec,
+	},
 #ifdef CONFIG_PELT_COMPATIBILITY_LAYER
 	{
 		.procname	= "sched_boost",
