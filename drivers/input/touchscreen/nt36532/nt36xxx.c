@@ -3743,6 +3743,7 @@ static int32_t nvt_ts_suspend(struct device *dev)
 {
 	uint8_t ret = 0;
 	uint8_t buf[4] = {0};
+	int db_wakeup;
 #if MT_PROTOCOL_B
 	uint32_t i = 0;
 	int enable = 0;
@@ -3756,7 +3757,9 @@ static int32_t nvt_ts_suspend(struct device *dev)
 	pm_stay_awake(dev);
 	ts->ic_state = NVT_IC_SUSPEND_IN;
 
-	if (!ts->db_wakeup)
+	/* Keep IRQ, gesture and pinctrl decisions consistent for this suspend. */
+	db_wakeup = READ_ONCE(ts->db_wakeup);
+	if (!db_wakeup)
 		nvt_irq_enable(false);
 
 #if NVT_TOUCH_ESD_PROTECT
@@ -3772,7 +3775,7 @@ static int32_t nvt_ts_suspend(struct device *dev)
 	bTouchIsAwake = 0;
 	dsi_panel_doubleclick_enable(true);
 
-	if (ts->db_wakeup & 0x01 || ts->db_wakeup & 0x02) {
+	if (db_wakeup & 0x01 || db_wakeup & 0x02) {
 		/*---write command to enter "wakeup gesture mode"---*/
 		/*DoubleClick wakeup CMD was sent by display to meet timing*/
 
@@ -3786,7 +3789,7 @@ static int32_t nvt_ts_suspend(struct device *dev)
 		else
 			NVT_ERR("enable irq wake failed. ret=%d\n", ret);
 
-		enable = (ts->db_wakeup & 0x02);
+		enable = (db_wakeup & 0x02);
 		memset(buf, 0, sizeof(buf));
 		buf[0] = EVENT_MAP_HOST_CMD;
 		buf[1] = 0x7B;
@@ -3794,7 +3797,7 @@ static int32_t nvt_ts_suspend(struct device *dev)
 		msleep(250);
 		CTP_SPI_WRITE(ts->client, buf, 3);
 		NVT_LOG("%s pen wakeup gesture\n", enable ? "Enable" : "Disable");
-	} else if (ts->db_wakeup == 0) {
+	} else if (db_wakeup == 0) {
 		NVT_LOG("enter deep sleep while keeping TDDI rails alive\n");
 		if (nvt_write_addr(ts->mmap->EVENT_BUF_ADDR | EVENT_MAP_HOST_CMD,
 				   0x11) < 0)
