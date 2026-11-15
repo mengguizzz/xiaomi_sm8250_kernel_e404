@@ -3868,6 +3868,7 @@ static int32_t nvt_ts_resume(struct device *dev)
 {
 	int ret = 0;
 	int fw_info_ret;
+	int attempt;
 	if (bTouchIsAwake) {
 		NVT_LOG("Touch is already resume\n");
 		return 0;
@@ -3881,6 +3882,8 @@ static int32_t nvt_ts_resume(struct device *dev)
 	if (ts->dev_pm_suspend)
 		pm_stay_awake(dev);
 
+	/* Drain the IRQ before taking the lock needed by its thread. */
+	nvt_irq_enable(false);
 	mutex_lock(&ts->lock);
 
 	NVT_LOG("start\n");
@@ -3898,13 +3901,11 @@ static int32_t nvt_ts_resume(struct device *dev)
 		if (ret < 0) {
 			NVT_ERR("Failed to select %s pinstate %d\n",
 				PINCTRL_STATE_ACTIVE, ret);
+			goto resume_failed;
 		}
 	} else {
 		NVT_ERR("Failed to init pinctrl\n");
 	}
-
-	/* Quiesce the IRQ while the controller is reprobed or reflashed. */
-	nvt_irq_enable(false);
 
 	// please make sure display reset(RESX) sequence and mipi dsi cmds sent before this
 #if NVT_TOUCH_SUPPORT_HW_RST
@@ -3916,30 +3917,38 @@ static int32_t nvt_ts_resume(struct device *dev)
 		ts->force_fw_reload = true;
 	}
 #endif
-	if (nvt_get_dbgfw_status()) {
-		if (nvt_update_firmware(DEFAULT_DEBUG_FW_NAME) < 0) {
-			NVT_ERR("use built-in fw");
-			nvt_update_firmware(ts->fw_name);
+	/* INIT/download completion alone does not establish baseline readiness. */
+	msleep(150);
+	for (attempt = 0; attempt < 2; attempt++) {
+		if (nvt_get_dbgfw_status()) {
+			ret = nvt_update_firmware(DEFAULT_DEBUG_FW_NAME);
+			if (ret < 0) {
+				NVT_ERR("use built-in fw\n");
+				ret = nvt_update_firmware(ts->fw_name);
+			}
+		} else {
+			fw_info_ret = -1;
+			if (!ts->force_fw_reload)
+				fw_info_ret = nvt_get_fw_info();
+			if (!fw_info_ret) {
+				NVT_LOG("firmware alive, verify resume readiness\n");
+				ret = 0;
+			} else {
+				ret = nvt_update_firmware(ts->fw_name);
+			}
 		}
-	} else {
-		/*
-		 * Panel power sequencing does not always reset the Novatek MCU.
-		 * Probe the live firmware first and only reflash when needed.
-		 */
-		msleep(150);
-		fw_info_ret = -1;
-		if (!ts->force_fw_reload)
-			fw_info_ret = nvt_get_fw_info();
-		if (!fw_info_ret) {
-			NVT_LOG("firmware alive after resume, skip redownload\n");
-		} else if (nvt_update_firmware(ts->fw_name)) {
-			NVT_ERR("download firmware failed after fw probe (%d)\n",
-				fw_info_ret);
-		} else if (!ts->force_fw_reload) {
-			nvt_check_fw_reset_state(RESET_STATE_REK);
-		}
-		ts->force_fw_reload = false;
+		if (!ret)
+			ret = nvt_check_fw_reset_state(RESET_STATE_REK);
+		if (!ret)
+			break;
+		NVT_ERR("resume not ready: attempt=%d ret=%d\n",
+			attempt + 1, ret);
+		ts->force_fw_reload = true;
 	}
+	if (ret)
+		goto resume_failed;
+	ts->force_fw_reload = false;
+	NVT_LOG("resume ready: REK verified, attempt=%d\n", attempt + 1);
 
 	nvt_irq_enable(true);
 
@@ -3978,6 +3987,16 @@ static int32_t nvt_ts_resume(struct device *dev)
 	if (ts->dev_pm_suspend)
 		pm_relax(dev);
 	return 0;
+
+resume_failed:
+	/* Keep a failed controller quiescent; the next panel wake may retry. */
+	ts->force_fw_reload = true;
+	ts->ic_state = NVT_IC_SUSPEND_OUT;
+	NVT_ERR("resume failed: ret=%d, IRQ stays disabled for next wake\n", ret);
+	mutex_unlock(&ts->lock);
+	if (ts->dev_pm_suspend)
+		pm_relax(dev);
+	return ret;
 }
 
 
