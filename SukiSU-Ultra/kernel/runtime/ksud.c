@@ -238,6 +238,8 @@ int ksu_handle_execveat_ksud(int *fd, struct filename **filename_ptr,
 #else
                 first_zygote = false;
 #endif
+                /* Boot exec interception must yield to normal sucompat. */
+                stop_execve_hook();
             }
         }
     }
