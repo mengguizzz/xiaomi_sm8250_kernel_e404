@@ -43,6 +43,44 @@ and reliability work:
 `CONFIG_KSU_FEATURE_ADBROOT` and KPM are intentionally disabled. Some newer
 SUSFS features are not available in the pinned v1.5.9 implementation.
 
+## Verified source baseline (2026-11-16)
+
+Use `HyperOS4.0-404-stable`. The source through `3e689f6` matches the
+working pipa HOS4 kernel tested on 2026-11-16. This is the original vendored
+SukiSU implementation with SUSFS v1.5.9, not the experimental newer
+SukiSU/SUSFS 2.4 integration. The newer integration rebooted with Zygisk
+and is not the supported baseline. The SukiSU build version fallback is
+not an independent upstream commit identifier.
+
+The current baseline additionally includes:
+
+- NT36532 touch r2/r3: snapshot wakeup mode during suspend, restore the
+  active pins and IRQ path on resume, verify firmware REK readiness, and
+  retry firmware download once. A failed resume remains quiescent so the
+  next panel wake can retry. Low-frequency touch failures still need
+  longer testing; do not interpret this as proof they are eliminated.
+- Functional MSM performance CPU min/max requests, shared-policy constraint
+  aggregation, and the core_ctl header guard fix; `CONFIG_MSM_PERFORMANCE=y`.
+- A startup sucompat fix: finish early exec interception after the first
+  zygote setup in the SUSFS path. Cold-boot root access no longer requires
+  opening the manager. Root and Zygisk/LSPosed were observed working on
+  the tested device; this is not universal module compatibility testing.
+
+The five changed source/config files were compared byte-for-byte by SHA256
+against the actual build tree. The touch r3 source and build configuration
+remain unchanged by the startup su fix. No experimental A-G root changes,
+stage tracing, or MTD crash-logging configuration are included.
+
+Validated 2026-11-16 raw Image SHA256:
+
+```text
+6DC12D800F288A74225725BD6420C42819F345AB6C6BF78157E55BEEF92560B9
+```
+
+Build timestamps and generated version metadata can change the binary hash
+on rebuild; this identifies the tested artifact, not a bit-reproducibility
+guarantee.
+
 ## Configuration
 
 The complete, validated configuration is stored in:
@@ -55,6 +93,7 @@ Important options:
 
 ```text
 CONFIG_KSU=y
+CONFIG_MSM_PERFORMANCE=y
 # CONFIG_KSU_FEATURE_ADBROOT is not set
 # CONFIG_KPM is not set
 
@@ -112,8 +151,10 @@ mv out/usr/out/usr/techpack out/usr/techpack
 
 make O=out ARCH=arm64 \
   CROSS_COMPILE=aarch64-linux-gnu- \
+  CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
+  CLANG_TRIPLE=aarch64-linux-gnu- \
   LLVM=1 LLVM_IAS=1 \
-  KSU_GITHUB_VER=4.3.0 \
+  KSU_GITHUB_VER=4.3.0 GITHUB_COMMITS= KSU_VERSION=41131 \
   -j"$(nproc)" Image
 ```
 
@@ -127,9 +168,15 @@ This is a raw ARM64 kernel `Image`, not an Android `boot.img`.
 
 ## Packaging and installation
 
-Use an AnyKernel3 installer for recovery installation. The validated package
-uses the known-good `vendor_boot.img` and `dtbo.img` together with the new kernel
-Image. Do not write the raw `Image` directly to `boot`.
+For the current HOS4 setup, extract the device's known-good boot image and
+replace only its kernel with the raw Image. Preserve the ramdisk, header,
+command line, and partition size, then re-unpack the result to verify them.
+Keep the current `dtbo` and `vendor_boot` unchanged. If using AnyKernel3,
+configure it to replace only the kernel. Do not write the raw Image directly
+to the boot partition.
+
+The older package hashes below are historical references, not the current
+2026-11-16 delivery.
 
 Validated reference build from 2026-11-02:
 
