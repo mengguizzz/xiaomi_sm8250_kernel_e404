@@ -18,6 +18,7 @@
 #include <linux/input.h>
 #include <linux/kthread.h>
 #include <linux/sched/core_ctl.h>
+#include <linux/mutex.h>
 
 /*
  * Sched will provide the data for every 20ms window,
@@ -55,64 +56,75 @@ static unsigned int top_load[CLUSTER_MAX];
 static unsigned int curr_cap[CLUSTER_MAX];
 
 /*******************************sysfs start************************************/
-static int set_cpu_min_freq(const char *buf, const struct kernel_param *kp)
+static DEFINE_MUTEX(perf_limits_lock);
+
+/* Preserve Qualcomm's CPU:kHz ABI. Validate the complete update before
+ * committing it, and update each shared cpufreq policy only once.
+ */
+static int set_cpu_freq_limit(const char *buf, bool maximum)
 {
-#if 0
-	int i, j, ntokens = 0;
-	unsigned int val, cpu;
-	const char *cp = buf;
-	struct cpu_status *i_cpu_stats;
+	unsigned int *values, cpu, value;
+	char *copy, *cursor, *token, *colon;
+	cpumask_t changed;
 	struct cpufreq_policy policy;
-	cpumask_var_t limit_mask;
+	int ret = -EINVAL;
+	bool any = false;
 
-	while ((cp = strpbrk(cp + 1, " :")))
-		ntokens++;
-
-	/* CPU:value pair */
-	if (!(ntokens % 2))
-		return -EINVAL;
-
-	cp = buf;
-	cpumask_clear(limit_mask);
-	for (i = 0; i < ntokens; i += 2) {
-		if (sscanf(cp, "%u:%u", &cpu, &val) != 2)
-			return -EINVAL;
-		if (cpu > (num_present_cpus() - 1))
-			return -EINVAL;
-
-		i_cpu_stats = &per_cpu(msm_perf_cpu_stats, cpu);
-
-		i_cpu_stats->min = val;
-		cpumask_set_cpu(cpu, limit_mask);
-
-		cp = strnchr(cp, strlen(cp), ' ');
-		cp++;
+	copy = kstrdup(buf, GFP_KERNEL);
+	values = kcalloc(nr_cpu_ids, sizeof(*values), GFP_KERNEL);
+	if (!copy || !values) {
+		ret = -ENOMEM;
+		goto out;
 	}
-
-	/*
-	 * Since on synchronous systems policy is shared amongst multiple
-	 * CPUs only one CPU needs to be updated for the limit to be
-	 * reflected for the entire cluster. We can avoid updating the policy
-	 * of other CPUs in the cluster once it is done for at least one CPU
-	 * in the cluster
-	 */
-	get_online_cpus();
-	for_each_cpu(i, limit_mask) {
-		i_cpu_stats = &per_cpu(msm_perf_cpu_stats, i);
-
-		if (cpufreq_get_policy(&policy, i))
+	cpumask_clear(&changed);
+	cursor = copy;
+	while ((token = strsep(&cursor, " \t\n"))) {
+		if (!*token)
 			continue;
+		colon = strnchr(token, strlen(token), ':');
+		if (!colon || strnchr(colon + 1, strlen(colon + 1), ':'))
+			goto out;
+		*colon++ = '\0';
+		if (kstrtouint(token, 10, &cpu) ||
+		    kstrtouint(colon, 10, &value) ||
+		    cpu >= nr_cpu_ids || !cpu_present(cpu))
+			goto out;
+		values[cpu] = value;
+		cpumask_set_cpu(cpu, &changed);
+		any = true;
+	}
+	if (!any)
+		goto out;
 
-		if (cpu_online(i) && (policy.min != i_cpu_stats->min))
-			cpufreq_update_policy(i);
-
-		for_each_cpu(j, policy.related_cpus)
-			cpumask_clear_cpu(j, limit_mask);
+	mutex_lock(&perf_limits_lock);
+	for_each_cpu(cpu, &changed) {
+		if (maximum)
+			WRITE_ONCE(per_cpu(msm_perf_cpu_stats, cpu).max,
+				   values[cpu]);
+		else
+			WRITE_ONCE(per_cpu(msm_perf_cpu_stats, cpu).min,
+				   values[cpu]);
+	}
+	get_online_cpus();
+	for_each_cpu(cpu, &changed) {
+		if (cpufreq_get_policy(&policy, cpu))
+			continue;
+		if (cpu_online(policy.cpu))
+			cpufreq_update_policy(policy.cpu);
+		cpumask_andnot(&changed, &changed, policy.related_cpus);
 	}
 	put_online_cpus();
-#endif
+	mutex_unlock(&perf_limits_lock);
+	ret = 0;
+out:
+	kfree(values);
+	kfree(copy);
+	return ret;
+}
 
-	return 0;
+static int set_cpu_min_freq(const char *buf, const struct kernel_param *kp)
+{
+	return set_cpu_freq_limit(buf, false);
 }
 
 static int get_cpu_min_freq(char *buf, const struct kernel_param *kp)
@@ -136,54 +148,7 @@ module_param_cb(cpu_min_freq, &param_ops_cpu_min_freq, NULL, 0644);
 
 static int set_cpu_max_freq(const char *buf, const struct kernel_param *kp)
 {
-#if 0
-	int i, j, ntokens = 0;
-	unsigned int val, cpu;
-	const char *cp = buf;
-	struct cpu_status *i_cpu_stats;
-	struct cpufreq_policy policy;
-	cpumask_var_t limit_mask;
-
-	while ((cp = strpbrk(cp + 1, " :")))
-		ntokens++;
-
-	/* CPU:value pair */
-	if (!(ntokens % 2))
-		return -EINVAL;
-
-	cp = buf;
-	cpumask_clear(limit_mask);
-	for (i = 0; i < ntokens; i += 2) {
-		if (sscanf(cp, "%u:%u", &cpu, &val) != 2)
-			return -EINVAL;
-		if (cpu > (num_present_cpus() - 1))
-			return -EINVAL;
-
-		i_cpu_stats = &per_cpu(msm_perf_cpu_stats, cpu);
-
-		i_cpu_stats->max = val;
-		cpumask_set_cpu(cpu, limit_mask);
-
-		cp = strnchr(cp, strlen(cp), ' ');
-		cp++;
-	}
-
-	get_online_cpus();
-	for_each_cpu(i, limit_mask) {
-		i_cpu_stats = &per_cpu(msm_perf_cpu_stats, i);
-		if (cpufreq_get_policy(&policy, i))
-			continue;
-
-		if (cpu_online(i) && (policy.max != i_cpu_stats->max))
-			cpufreq_update_policy(i);
-
-		for_each_cpu(j, policy.related_cpus)
-			cpumask_clear_cpu(j, limit_mask);
-	}
-	put_online_cpus();
-#endif
-
-	return 0;
+	return set_cpu_freq_limit(buf, true);
 }
 
 static int get_cpu_max_freq(char *buf, const struct kernel_param *kp)
@@ -288,13 +253,21 @@ static int perf_adjust_notify(struct notifier_block *nb, unsigned long val,
 							void *data)
 {
 	struct cpufreq_policy *policy = data;
-	unsigned int cpu = policy->cpu;
-	struct cpu_status *cpu_st = &per_cpu(msm_perf_cpu_stats, cpu);
-	unsigned int min = cpu_st->min, max = cpu_st->max;
+	unsigned int cpu = policy->cpu, member;
+	unsigned int min = 0, max = UINT_MAX;
 
 
 	if (val != CPUFREQ_ADJUST)
 		return NOTIFY_OK;
+	for_each_cpu(member, policy->related_cpus) {
+		min = max_t(unsigned int, min,
+			READ_ONCE(per_cpu(msm_perf_cpu_stats, member).min));
+		max = min_t(unsigned int, max,
+			READ_ONCE(per_cpu(msm_perf_cpu_stats, member).max));
+	}
+	/* A boost must not raise an existing thermal/user maximum. */
+	max = min_t(unsigned int, max, policy->max);
+	min = min_t(unsigned int, min, max);
 
 	pr_debug("msm_perf: CPU%u policy before: %u:%u kHz\n", cpu,
 						policy->min, policy->max);
